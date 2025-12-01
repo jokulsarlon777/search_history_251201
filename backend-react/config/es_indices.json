@@ -1,0 +1,56 @@
+{
+  "vehicle_issues": {
+    "display_name": "차량 이슈",
+    "description": "차량 관련 문제점, 현상, 원인 및 대책 정보",
+    "search_fields": [
+      "시스템^3",
+      "문제점내용^2",
+      "현상",
+      "원인및요구안내용",
+      "대책조치",
+      "차종"
+    ],
+    "source_fields": [
+      "순번",
+      "차종",
+      "단계",
+      "시스템",
+      "문제점내용",
+      "현상",
+      "원인및요구안내용",
+      "대책조치"
+    ],
+    "result_format": {
+      "type": "vehicle",
+      "title_fields": ["차종", "시스템"],
+      "content_fields": {
+        "문제": "문제점내용",
+        "현상": "현상",
+        "원인": "원인및요구안내용",
+        "대책": "대책조치",
+        "단계": "단계"
+      }
+    }
+  },
+  "documents": {
+    "display_name": "기술 문서",
+    "description": "일반 기술 문서 및 참고 자료",
+    "search_fields": [
+      "title^2",
+      "content",
+      "description"
+    ],
+    "source_fields": [
+      "title",
+      "content",
+      "url",
+      "timestamp"
+    ],
+    "result_format": {
+      "type": "document",
+      "title_field": "title",
+      "content_field": "content",
+      "url_field": "url"
+    }
+  }
+}

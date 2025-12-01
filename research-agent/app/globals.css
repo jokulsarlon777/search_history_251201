@@ -1,0 +1,249 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 98%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 221 83% 53%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 222 47% 11%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 221 83% 53%;
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    --background: 222 47% 6%;
+    --foreground: 210 40% 98%;
+    --card: 222 47% 9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222 47% 9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 199 89% 48%;
+    --primary-foreground: 222 47% 6%;
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 217 33% 17%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217 33% 17%;
+    --input: 217 33% 17%;
+    --ring: 199 89% 48%;
+  }
+}
+
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+@layer utilities {
+  .fade-in {
+    animation: fade-in 0.5s ease-out;
+  }
+}
+
+/* Enhanced Markdown Styles */
+@layer components {
+  .prose {
+    color: hsl(var(--foreground));
+  }
+
+  .prose h1,
+  .prose h2,
+  .prose h3,
+  .prose h4,
+  .prose h5,
+  .prose h6 {
+    color: hsl(var(--foreground));
+    font-weight: 600;
+    margin-top: 1.5em;
+    margin-bottom: 0.75em;
+    line-height: 1.25;
+  }
+
+  .prose h1 {
+    font-size: 1.875em;
+    border-bottom: 2px solid hsl(var(--border));
+    padding-bottom: 0.3em;
+  }
+
+  .prose h2 {
+    font-size: 1.5em;
+    border-bottom: 1px solid hsl(var(--border));
+    padding-bottom: 0.3em;
+  }
+
+  .prose h3 {
+    font-size: 1.25em;
+  }
+
+  .prose h4 {
+    font-size: 1.125em;
+  }
+
+  .prose p {
+    margin-top: 0.75em;
+    margin-bottom: 0.75em;
+    line-height: 1.7;
+  }
+
+  .prose a {
+    color: hsl(var(--primary));
+    text-decoration: underline;
+    text-decoration-color: hsl(var(--primary) / 0.3);
+    text-underline-offset: 2px;
+    transition: all 0.2s;
+  }
+
+  .prose a:hover {
+    text-decoration-color: hsl(var(--primary));
+  }
+
+  .prose strong {
+    color: hsl(var(--foreground));
+    font-weight: 600;
+  }
+
+  .prose em {
+    color: hsl(var(--foreground));
+    font-style: italic;
+  }
+
+  .prose code {
+    background-color: hsl(var(--muted));
+    color: hsl(var(--foreground));
+    padding: 0.2em 0.4em;
+    border-radius: 0.25rem;
+    font-size: 0.875em;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+
+  .prose pre {
+    background-color: hsl(var(--muted)) !important;
+    color: hsl(var(--foreground)) !important;
+    padding: 1em;
+    border-radius: 0.5rem;
+    overflow-x: auto;
+    margin-top: 1em;
+    margin-bottom: 1em;
+    border: 1px solid hsl(var(--border));
+  }
+
+  .prose pre code {
+    background-color: transparent;
+    padding: 0;
+    border-radius: 0;
+    font-size: 0.875em;
+  }
+
+  .prose ul,
+  .prose ol {
+    margin-top: 0.75em;
+    margin-bottom: 0.75em;
+    padding-left: 1.5em;
+  }
+
+  .prose li {
+    margin-top: 0.25em;
+    margin-bottom: 0.25em;
+    line-height: 1.7;
+  }
+
+  .prose li::marker {
+    color: hsl(var(--muted-foreground));
+  }
+
+  .prose blockquote {
+    border-left: 4px solid hsl(var(--primary));
+    padding-left: 1em;
+    margin-left: 0;
+    margin-right: 0;
+    margin-top: 1em;
+    margin-bottom: 1em;
+    font-style: italic;
+    color: hsl(var(--muted-foreground));
+  }
+
+  .prose table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1em;
+    margin-bottom: 1em;
+  }
+
+  .prose th,
+  .prose td {
+    border: 1px solid hsl(var(--border));
+    padding: 0.5em 0.75em;
+    text-align: left;
+  }
+
+  .prose th {
+    background-color: hsl(var(--muted));
+    font-weight: 600;
+  }
+
+  .prose tr:nth-child(even) {
+    background-color: hsl(var(--muted) / 0.3);
+  }
+
+  .prose hr {
+    border: none;
+    border-top: 1px solid hsl(var(--border));
+    margin-top: 2em;
+    margin-bottom: 2em;
+  }
+
+  .prose img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 0.5rem;
+    margin-top: 1em;
+    margin-bottom: 1em;
+  }
+
+  /* Code syntax highlighting-like styles */
+  .prose pre code .hljs-comment {
+    color: hsl(var(--muted-foreground));
+    font-style: italic;
+  }
+
+  .prose pre code .hljs-keyword,
+  .prose pre code .hljs-selector-tag,
+  .prose pre code .hljs-title {
+    color: hsl(var(--primary));
+    font-weight: 600;
+  }
+
+  .prose pre code .hljs-string,
+  .prose pre code .hljs-attr {
+    color: hsl(199 89% 48%);
+  }
+
+  .prose pre code .hljs-number,
+  .prose pre code .hljs-literal {
+    color: hsl(142 71% 45%);
+  }
+}
