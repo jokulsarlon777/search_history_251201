@@ -61,7 +61,7 @@ export default function Home() {
     apiUrl,
     assistantId,
     apiKey,
-    useReactMode,
+    useDeepResearchMode,
     getActiveParams,
     setMessages,
     addMessage,
@@ -370,7 +370,7 @@ export default function Home() {
       addMessage({ role: "user", content });
 
       // React Agent 모드일 때만 캐시 확인 (둘 다 OFF일 때)
-      if (!useReactMode && !useQuickMode) {
+      if (!useDeepResearchMode && !useQuickMode) {
         const cached = reactModeCache.get(content);
         if (cached) {
           console.log("💾 Cache hit! Returning cached response");
@@ -405,12 +405,12 @@ export default function Home() {
       const REACT_AGENT_URL = process.env.NEXT_PUBLIC_REACT_AGENT_URL || "http://127.0.0.1:2025";
       const REACT_ASSISTANT_ID = process.env.NEXT_PUBLIC_REACT_ASSISTANT_ID || "react_agent";
 
-      // useReactMode가 true면 Deep Research, false면 React Agent (기본값)
-      const selectedApiUrl = useReactMode ? (apiUrl || LANGGRAPH_API_URL) : REACT_AGENT_URL;
-      const selectedAssistantId = useReactMode ? (assistantId || LANGGRAPH_ASSISTANT_ID) : REACT_ASSISTANT_ID;
+      // useDeepResearchMode가 true면 Deep Research, false면 React Agent (기본값)
+      const selectedApiUrl = useDeepResearchMode ? (apiUrl || LANGGRAPH_API_URL) : REACT_AGENT_URL;
+      const selectedAssistantId = useDeepResearchMode ? (assistantId || LANGGRAPH_ASSISTANT_ID) : REACT_ASSISTANT_ID;
 
       console.log("🎯 Mode Selection:", {
-        useReactMode,
+        useDeepResearchMode,
         useQuickMode,
         selectedApiUrl,
         selectedAssistantId,
@@ -420,8 +420,8 @@ export default function Home() {
       const client = createLangGraphClient(selectedApiUrl, apiKey);
 
       // 현재 모드에 맞는 Thread ID 가져오기
-      // useReactMode가 true면 Deep Research Thread, false면 React Agent Thread
-      let threadId = useReactMode ? researchThreadIdRef.current : reactThreadIdRef.current;
+      // useDeepResearchMode가 true면 Deep Research Thread, false면 React Agent Thread
+      let threadId = useDeepResearchMode ? researchThreadIdRef.current : reactThreadIdRef.current;
 
       if (!threadId) {
         const thread = await createThread(client);
@@ -433,8 +433,8 @@ export default function Home() {
         threadId = thread.thread_id;
 
         // 모드별 Thread ID 저장
-        // useReactMode가 true면 Deep Research Thread, false면 React Agent Thread
-        if (useReactMode) {
+        // useDeepResearchMode가 true면 Deep Research Thread, false면 React Agent Thread
+        if (useDeepResearchMode) {
           researchThreadIdRef.current = threadId;
         } else {
           reactThreadIdRef.current = threadId;
@@ -451,7 +451,7 @@ export default function Home() {
 
       // Debug: Log active parameters
       console.log("🔍 Active Parameters:", activeParams);
-      console.log("🔵 Deep Research Mode:", useReactMode);
+      console.log("🔵 Deep Research Mode:", useDeepResearchMode);
       console.log("⚡ Quick Mode:", useQuickMode);
       console.log("📝 Existing messages count:", messages.length);
       console.log("🆔 Thread ID:", threadId);
@@ -462,7 +462,7 @@ export default function Home() {
         selectedAssistantId,
         content,
         messages,
-        useReactMode ? activeParams : {}, // Deep Research 모드일 때만 파라미터 전달
+        useDeepResearchMode ? activeParams : {}, // Deep Research 모드일 때만 파라미터 전달
         abortControllerRef.current?.signal // Pass abort signal to cancel backend execution
       );
 
@@ -561,7 +561,7 @@ export default function Home() {
                     const content = lastMsg.content;
 
                     // React Agent 모드에서만 단계별 진행 상황 표시 (기본값, 둘 다 OFF일 때)
-                    if (!useReactMode && !useQuickMode) {
+                    if (!useDeepResearchMode && !useQuickMode) {
                       if (key === "agent" && content.includes("🤔 Thinking")) {
                         // Thinking 단계: 최소 2초 표시
                         setResearchStageWithDelay({
@@ -644,7 +644,7 @@ export default function Home() {
         updateThreadMetadata(threadId, "assistant", bufferContent);
 
         // React Agent 모드일 때만 응답 캐싱 (기본값, 둘 다 OFF일 때)
-        if (!useReactMode && !useQuickMode) {
+        if (!useDeepResearchMode && !useQuickMode) {
           reactModeCache.set(
             content,
             bufferContent,

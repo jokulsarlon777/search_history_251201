@@ -24,7 +24,7 @@ export function ChatInput({
 }: ChatInputProps) {
   const [input, setInput] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const { useQuickMode, setUseQuickMode, useReactMode, setUseReactMode, isStreaming } = useAppStore();
+  const { useQuickMode, setUseQuickMode, useDeepResearchMode, setUseDeepResearchMode, isStreaming } = useAppStore();
 
   // Auto-resize textarea
   useEffect(() => {
@@ -58,8 +58,8 @@ export function ChatInput({
           size="sm"
           onClick={() => {
             if (!useQuickMode) {
-              // Quick 모드를 켤 때: React 모드를 끄고 Quick 모드를 켬
-              setUseReactMode(false);
+              // Quick 모드를 켤 때: Deep Research 모드를 끄고 Quick 모드를 켬
+              setUseDeepResearchMode(false);
               setUseQuickMode(true);
             } else {
               // Quick 모드를 끌 때: 그냥 끔
@@ -81,28 +81,28 @@ export function ChatInput({
 
         {/* Deep Research Mode Toggle */}
         <Button
-          variant={useReactMode ? "default" : "outline"}
+          variant={useDeepResearchMode ? "default" : "outline"}
           size="sm"
           onClick={() => {
-            if (!useReactMode) {
+            if (!useDeepResearchMode) {
               // Deep Research 모드를 켤 때: Quick 모드를 끄고 Deep Research 모드를 켬
               setUseQuickMode(false);
-              setUseReactMode(true);
+              setUseDeepResearchMode(true);
             } else {
               // Deep Research 모드를 끌 때: 그냥 끔
-              setUseReactMode(false);
+              setUseDeepResearchMode(false);
             }
           }}
           className={cn(
             "gap-2 rounded-full transition-all duration-300",
-            useReactMode
+            useDeepResearchMode
               ? "bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white shadow-lg shadow-blue-500/30"
               : "border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
           )}
         >
-          <Search className={cn("h-4 w-4", useReactMode && "animate-pulse")} />
+          <Search className={cn("h-4 w-4", useDeepResearchMode && "animate-pulse")} />
           <span className="font-medium">
-            Deep Research {useReactMode ? "ON" : "OFF"}
+            Deep Research {useDeepResearchMode ? "ON" : "OFF"}
           </span>
         </Button>
       </div>

@@ -19,7 +19,7 @@ interface AppStore {
   apiKey: string | null;
   deepResearchParams: DeepResearchParams;
   useQuickMode: boolean;
-  useReactMode: boolean;
+  useDeepResearchMode: boolean;
 
   // Actions
   setMessages: (messages: Message[]) => void;
@@ -44,7 +44,7 @@ interface AppStore {
   setApiKey: (key: string | null) => void;
   setDeepResearchParams: (params: DeepResearchParams) => void;
   setUseQuickMode: (useQuickMode: boolean) => void;
-  setUseReactMode: (useReactMode: boolean) => void;
+  setUseDeepResearchMode: (useDeepResearchMode: boolean) => void;
   getActiveParams: () => DeepResearchParams;
 
   reset: () => void;
@@ -79,7 +79,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     max_researcher_iterations: 10,
   },
   useQuickMode: false,
-  useReactMode: false,
+  useDeepResearchMode: false,
 
   // Message actions
   setMessages: (messages) => set({ messages }),
@@ -220,8 +220,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setAssistantId: (id) => set({ assistantId: id }),
   setApiKey: (key) => set({ apiKey: key }),
   setDeepResearchParams: (params) => set({ deepResearchParams: params }),
-  setUseQuickMode: (useQuickMode) => set({ useQuickMode, useReactMode: useQuickMode ? false : get().useReactMode }),
-  setUseReactMode: (useReactMode) => set({ useReactMode, useQuickMode: useReactMode ? false : get().useQuickMode }),
+  setUseQuickMode: (useQuickMode) => set({ useQuickMode, useDeepResearchMode: useQuickMode ? false : get().useDeepResearchMode }),
+  setUseDeepResearchMode: (useDeepResearchMode) => set({ useDeepResearchMode, useQuickMode: useDeepResearchMode ? false : get().useQuickMode }),
 
   getActiveParams: () => {
     const state = get();
