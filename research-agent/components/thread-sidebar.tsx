@@ -112,7 +112,7 @@ export function ThreadSidebar({
 
         {/* Thread List */}
         <ScrollArea className="flex-1">
-          <div className="p-2 space-y-1">
+          <div className="p-3 space-y-1">
             {sortedThreads.length === 0 ? (
               <div className="p-8 text-center">
                 <MessagesSquare className="h-12 w-12 mx-auto mb-3 text-muted-foreground/50" />
@@ -135,15 +135,15 @@ export function ThreadSidebar({
                 <div
                   key={threadId}
                   className={cn(
-                    "group relative rounded-lg p-3 cursor-pointer transition-all duration-200",
+                    "group relative rounded-lg p-3 mr-10 cursor-pointer transition-all duration-200 max-w-[70%]",
                     currentThreadId === threadId
                       ? "bg-primary/10 border border-primary/20"
                       : "hover:bg-muted/50 border border-transparent"
                   )}
                   onClick={() => onThreadSelect(threadId)}
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-1">
+                    <div className="flex-1 min-w-0 pr-1">
                       <div className="flex items-center gap-2 mb-1">
                         <MessagesSquare className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
                         <h3
@@ -171,13 +171,13 @@ export function ThreadSidebar({
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                      className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
                       onClick={(e) => {
                         e.stopPropagation();
                         setDeleteThreadId(threadId);
                       }}
                     >
-                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                      <Trash2 className="h-3 w-3 text-destructive" />
                     </Button>
                   </div>
                 </div>

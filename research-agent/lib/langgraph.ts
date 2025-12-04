@@ -97,6 +97,34 @@ export async function loadThreadMessages(
       }
     }
 
+    // Calculate duration for assistant messages based on timestamps
+    for (let i = 0; i < formattedMessages.length; i++) {
+      const message = formattedMessages[i];
+
+      // Find the previous user message
+      if (message.role === "assistant" && message.timestamp && !message.duration) {
+        // Look backwards for the most recent user message
+        for (let j = i - 1; j >= 0; j--) {
+          const prevMessage = formattedMessages[j];
+          if (prevMessage.role === "user" && prevMessage.timestamp) {
+            try {
+              const userTime = new Date(prevMessage.timestamp).getTime();
+              const assistantTime = new Date(message.timestamp).getTime();
+              const duration = assistantTime - userTime;
+
+              // Only set duration if it's positive and reasonable (less than 10 minutes)
+              if (duration > 0 && duration < 600000) {
+                message.duration = duration;
+              }
+            } catch (error) {
+              console.error("Error calculating duration:", error);
+            }
+            break;
+          }
+        }
+      }
+    }
+
     return formattedMessages;
   } catch (e) {
     console.error("Failed to load thread messages:", e);

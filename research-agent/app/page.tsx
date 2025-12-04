@@ -62,6 +62,7 @@ export default function Home() {
     assistantId,
     apiKey,
     useDeepResearchMode,
+    useQuickMode,
     getActiveParams,
     setMessages,
     addMessage,
@@ -179,22 +180,70 @@ export default function Home() {
       if (serverThreadsLoaded) return;
 
       try {
-        const client = createLangGraphClient(apiUrl || LANGGRAPH_API_URL, apiKey);
-        const serverThreads = await getServerThreads(
-          client,
-          assistantId || LANGGRAPH_ASSISTANT_ID
+        const threadsMap: Record<string, any> = {};
+
+        // Define server configurations
+        const REACT_AGENT_URL = process.env.NEXT_PUBLIC_REACT_AGENT_URL || "http://127.0.0.1:2025";
+        const REACT_ASSISTANT_ID = process.env.NEXT_PUBLIC_REACT_ASSISTANT_ID || "react_agent";
+        const RESEARCH_URL = apiUrl || LANGGRAPH_API_URL;
+        const RESEARCH_ASSISTANT_ID = assistantId || LANGGRAPH_ASSISTANT_ID;
+
+        const serverConfigs = [
+          {
+            type: "react" as const,
+            url: REACT_AGENT_URL,
+            assistantId: REACT_ASSISTANT_ID,
+          },
+          {
+            type: "research" as const,
+            url: RESEARCH_URL,
+            assistantId: RESEARCH_ASSISTANT_ID,
+          },
+        ];
+
+        // Load threads from both servers in parallel
+        await Promise.all(
+          serverConfigs.map(async (config) => {
+            try {
+              const client = createLangGraphClient(config.url, apiKey);
+              const serverThreads = await getServerThreads(client, config.assistantId);
+
+              // Load messages for all threads in parallel
+              const threadPromises = serverThreads.map(async (thread) => {
+                try {
+                  const msgs = await loadThreadMessages(client, thread.thread_id);
+                  return {
+                    thread_id: thread.thread_id,
+                    metadata: {
+                      title: msgs[0]?.content.slice(0, 30) + "..." || "새 대화",
+                      created_at: thread.created_at || new Date().toISOString(),
+                      message_count: msgs.length,
+                      messages: msgs,
+                      server_type: config.type,
+                      api_url: config.url,
+                      assistant_id: config.assistantId,
+                    },
+                  };
+                } catch (error) {
+                  console.error(`Failed to load messages for thread ${thread.thread_id}:`, error);
+                  return null;
+                }
+              });
+
+              const results = await Promise.all(threadPromises);
+
+              // Add successful results to threadsMap
+              results.forEach((result) => {
+                if (result) {
+                  threadsMap[result.thread_id] = result.metadata;
+                }
+              });
+            } catch (error) {
+              console.error(`Failed to load threads from ${config.type} server:`, error);
+            }
+          })
         );
 
-        const threadsMap: Record<string, any> = {};
-        for (const thread of serverThreads) {
-          const msgs = await loadThreadMessages(client, thread.thread_id);
-          threadsMap[thread.thread_id] = {
-            title: msgs[0]?.content.slice(0, 30) + "..." || "새 대화",
-            created_at: thread.created_at || new Date().toISOString(),
-            message_count: msgs.length,
-            messages: msgs,
-          };
-        }
         setThreads(threadsMap);
         setServerThreadsLoaded(true);
       } catch (error) {
@@ -217,10 +266,34 @@ export default function Home() {
     if (threadId === currentThreadId) return;
 
     try {
-      const client = createLangGraphClient(apiUrl || LANGGRAPH_API_URL, apiKey);
-      const msgs = await loadThreadMessages(client, threadId);
-      setMessages(msgs);
-      setCurrentThreadId(threadId);
+      const threadMetadata = threads[threadId];
+
+      // Use cached messages if available
+      if (threadMetadata?.messages && threadMetadata.messages.length > 0) {
+        console.log(`✅ Using cached messages for thread ${threadId}`);
+        setMessages(threadMetadata.messages);
+        setCurrentThreadId(threadId);
+        return;
+      }
+
+      // If no cached messages, load from correct server
+      if (threadMetadata?.api_url && threadMetadata?.assistant_id) {
+        console.log(`🔄 Loading messages from ${threadMetadata.server_type} server for thread ${threadId}`);
+        const client = createLangGraphClient(threadMetadata.api_url, apiKey);
+        const msgs = await loadThreadMessages(client, threadId);
+        setMessages(msgs);
+        setCurrentThreadId(threadId);
+
+        // Update cache
+        threadMetadata.messages = msgs;
+      } else {
+        // Fallback: try default server
+        console.warn(`⚠️ No server info for thread ${threadId}, using default server`);
+        const client = createLangGraphClient(apiUrl || LANGGRAPH_API_URL, apiKey);
+        const msgs = await loadThreadMessages(client, threadId);
+        setMessages(msgs);
+        setCurrentThreadId(threadId);
+      }
     } catch (error) {
       console.error("Failed to load thread:", error);
       toast.error("대화 불러오기 실패");
@@ -363,6 +436,9 @@ export default function Home() {
     // Create new AbortController for this request
     abortControllerRef.current = new AbortController();
 
+    // Store user question to filter it from responses
+    const userQuestion = content.trim();
+
     try {
       setIsStreaming(true);
 
@@ -442,6 +518,20 @@ export default function Home() {
         }
 
         setCurrentThreadId(threadId);
+
+        // Initialize thread metadata with server info
+        const newThreadMetadata = {
+          title: content.slice(0, 30) + "..." || "새 대화",
+          created_at: new Date().toISOString(),
+          message_count: 0,
+          messages: [],
+          server_type: useDeepResearchBackend ? ("research" as const) : ("react" as const),
+          api_url: selectedApiUrl,
+          assistant_id: selectedAssistantId,
+        };
+
+        // Add to threads map
+        addThread(threadId, newThreadMetadata);
       }
 
       // Update thread metadata
@@ -467,9 +557,50 @@ export default function Home() {
         abortControllerRef.current?.signal // Pass abort signal to cancel backend execution
       );
 
+      // Helper function to remove user question from AI response
+      const removeUserQuestion = (responseContent: string): string => {
+        if (!responseContent) return responseContent;
+        if (!userQuestion) return responseContent;
+
+        const trimmedContent = responseContent.trim();
+
+        // Don't filter if content contains process indicators (Thinking, Tool 호출, etc)
+        const processIndicators = ['🤔', '🔧', '📊', '### ', 'Thinking', 'Tool'];
+        const hasProcessIndicator = processIndicators.some(indicator =>
+          trimmedContent.includes(indicator)
+        );
+
+        if (hasProcessIndicator) {
+          return responseContent; // Keep process messages intact
+        }
+
+        // Remove if question appears at the start with common prefixes
+        const patterns = [
+          `질문: ${userQuestion}`,
+          `Q: ${userQuestion}`,
+          `사용자 질문: ${userQuestion}`,
+        ];
+
+        for (const pattern of patterns) {
+          if (trimmedContent.startsWith(pattern)) {
+            const cleaned = trimmedContent.slice(pattern.length).trim();
+            return cleaned;
+          }
+        }
+
+        // If the content is EXACTLY the user question (no prefix), remove it
+        if (trimmedContent === userQuestion) {
+          return ''; // Return empty - ResearchProgress will still show
+        }
+
+        return responseContent;
+      };
+
       // Debounced update function
       const scheduleUpdate = (newContent: string) => {
-        bufferContent = newContent;
+        // Remove user question if it appears at the start
+        const cleanedContent = removeUserQuestion(newContent);
+        bufferContent = cleanedContent;
 
         // Clear existing timer
         if (updateTimerRef.current) {
@@ -820,10 +951,11 @@ export default function Home() {
                     message={message}
                     isEditable={message.role === "user" && index === messages.length - 2}
                     onEdit={(newContent) => handleEditMessage(index, newContent)}
+                    onSuggestQuestion={handleSendMessage}
                   />
                 </div>
               ))}
-              {streamingContent && (
+              {(isStreaming || streamingContent) && (
                 <div className="fade-in">
                   <ChatMessage
                     message={{
@@ -832,6 +964,7 @@ export default function Home() {
                     }}
                     researchStage={researchStage}
                     isStreaming={true}
+                    onSuggestQuestion={handleSendMessage}
                   />
                 </div>
               )}

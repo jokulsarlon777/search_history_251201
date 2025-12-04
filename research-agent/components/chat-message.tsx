@@ -13,6 +13,14 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { SourceCitation } from "@/components/source-citation";
 import { ResearchProgress, type ResearchStage } from "@/components/research-progress";
+import {
+  SuggestedQuestions,
+  ConclusionCard,
+  extractSuggestedQuestions,
+  extractConclusion,
+  removeSuggestedQuestionsSection,
+  removeConclusionSection
+} from "@/components/suggested-questions";
 import type { Message } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -23,6 +31,7 @@ interface ChatMessageProps {
   isEditable?: boolean;
   researchStage?: ResearchStage | null;
   isStreaming?: boolean;
+  onSuggestQuestion?: (question: string) => void;
 }
 
 function CodeBlock({ inline, className, children, ...props }: any) {
@@ -86,12 +95,28 @@ export const ChatMessage = memo(function ChatMessage({
   onEdit,
   isEditable = false,
   researchStage = null,
-  isStreaming = false
+  isStreaming = false,
+  onSuggestQuestion
 }: ChatMessageProps) {
   const [copied, setCopied] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState(message.content);
   const isUser = message.role === "user";
+
+  // Extract suggested questions and conclusion from assistant messages
+  const suggestedQuestions = !isUser ? extractSuggestedQuestions(message.content) : [];
+  const conclusion = !isUser ? extractConclusion(message.content) : null;
+
+  // Remove both conclusion and suggested questions sections from main content
+  let displayContent = message.content;
+  if (!isUser) {
+    if (conclusion) {
+      displayContent = removeConclusionSection(displayContent);
+    }
+    if (suggestedQuestions.length > 0) {
+      displayContent = removeSuggestedQuestionsSection(displayContent);
+    }
+  }
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(message.content);
@@ -252,36 +277,53 @@ export const ChatMessage = memo(function ChatMessage({
             </div>
           ) : (
             <>
-              <div className="prose prose-sm max-w-none dark:prose-invert prose-p:leading-relaxed prose-pre:bg-muted prose-pre:text-foreground break-words overflow-x-auto">
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  components={{
-                    a: ({ node, ...props }) => (
-                      <a
-                        {...props}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-primary underline decoration-primary/30 hover:decoration-primary transition-colors"
-                      />
-                    ),
-                    p: ({ node, children, ...props }) => {
-                      // Check if children contains code blocks to avoid hydration error
-                      const hasCodeBlock = node?.children?.some(
-                        (child: any) => child.tagName === 'code' && child.properties?.className?.includes('language-')
-                      );
-                      if (hasCodeBlock) {
-                        return <div {...props}>{children}</div>;
-                      }
-                      return <p {...props}>{children}</p>;
-                    },
-                    code: CodeBlock,
-                  }}
-                >
-                  {message.content}
-                </ReactMarkdown>
-              </div>
+              {displayContent && (
+                <div className="prose prose-sm max-w-none dark:prose-invert prose-p:leading-relaxed prose-pre:bg-muted prose-pre:text-foreground break-words overflow-x-auto">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      a: ({ node, ...props }) => (
+                        <a
+                          {...props}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary underline decoration-primary/30 hover:decoration-primary transition-colors"
+                        />
+                      ),
+                      p: ({ node, children, ...props }) => {
+                        // Check if children contains code blocks to avoid hydration error
+                        const hasCodeBlock = node?.children?.some(
+                          (child: any) => child.tagName === 'code' && child.properties?.className?.includes('language-')
+                        );
+                        if (hasCodeBlock) {
+                          return <div {...props}>{children}</div>;
+                        }
+                        return <p {...props}>{children}</p>;
+                      },
+                      code: CodeBlock,
+                    }}
+                  >
+                    {displayContent}
+                  </ReactMarkdown>
+                </div>
+              )}
               {message.sources && message.sources.length > 0 && (
                 <SourceCitation sources={message.sources} />
+              )}
+              {/* Conclusion Card */}
+              {!isUser && conclusion && !isStreaming && (
+                <div className="mt-4">
+                  <ConclusionCard content={conclusion} />
+                </div>
+              )}
+              {/* Suggested Questions */}
+              {!isUser && suggestedQuestions.length > 0 && onSuggestQuestion && !isStreaming && (
+                <div className="mt-4">
+                  <SuggestedQuestions
+                    questions={suggestedQuestions}
+                    onQuestionClick={onSuggestQuestion}
+                  />
+                </div>
               )}
             </>
           )}

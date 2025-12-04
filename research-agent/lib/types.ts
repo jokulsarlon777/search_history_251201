@@ -28,6 +28,9 @@ export interface ThreadMetadata {
   created_at: string;
   message_count: number;
   messages: Message[];
+  server_type: "react" | "research"; // Which server this thread belongs to
+  api_url: string; // Server URL for this thread
+  assistant_id: string; // Assistant ID for this thread
 }
 
 export interface DeepResearchParams {
