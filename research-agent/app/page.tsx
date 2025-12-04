@@ -405,9 +405,10 @@ export default function Home() {
       const REACT_AGENT_URL = process.env.NEXT_PUBLIC_REACT_AGENT_URL || "http://127.0.0.1:2025";
       const REACT_ASSISTANT_ID = process.env.NEXT_PUBLIC_REACT_ASSISTANT_ID || "react_agent";
 
-      // useDeepResearchMode가 true면 Deep Research, false면 React Agent (기본값)
-      const selectedApiUrl = useDeepResearchMode ? (apiUrl || LANGGRAPH_API_URL) : REACT_AGENT_URL;
-      const selectedAssistantId = useDeepResearchMode ? (assistantId || LANGGRAPH_ASSISTANT_ID) : REACT_ASSISTANT_ID;
+      // Quick Mode 또는 Deep Research Mode가 true면 Deep Research 백엔드(포트 2024), false면 React Agent (포트 2025)
+      const useDeepResearchBackend = useQuickMode || useDeepResearchMode;
+      const selectedApiUrl = useDeepResearchBackend ? (apiUrl || LANGGRAPH_API_URL) : REACT_AGENT_URL;
+      const selectedAssistantId = useDeepResearchBackend ? (assistantId || LANGGRAPH_ASSISTANT_ID) : REACT_ASSISTANT_ID;
 
       console.log("🎯 Mode Selection:", {
         useDeepResearchMode,
@@ -420,8 +421,8 @@ export default function Home() {
       const client = createLangGraphClient(selectedApiUrl, apiKey);
 
       // 현재 모드에 맞는 Thread ID 가져오기
-      // useDeepResearchMode가 true면 Deep Research Thread, false면 React Agent Thread
-      let threadId = useDeepResearchMode ? researchThreadIdRef.current : reactThreadIdRef.current;
+      // Quick Mode 또는 Deep Research Mode면 Deep Research Thread, 아니면 React Agent Thread
+      let threadId = useDeepResearchBackend ? researchThreadIdRef.current : reactThreadIdRef.current;
 
       if (!threadId) {
         const thread = await createThread(client);
@@ -433,8 +434,8 @@ export default function Home() {
         threadId = thread.thread_id;
 
         // 모드별 Thread ID 저장
-        // useDeepResearchMode가 true면 Deep Research Thread, false면 React Agent Thread
-        if (useDeepResearchMode) {
+        // Quick Mode 또는 Deep Research Mode면 Deep Research Thread, 아니면 React Agent Thread
+        if (useDeepResearchBackend) {
           researchThreadIdRef.current = threadId;
         } else {
           reactThreadIdRef.current = threadId;
@@ -462,7 +463,7 @@ export default function Home() {
         selectedAssistantId,
         content,
         messages,
-        useDeepResearchMode ? activeParams : {}, // Deep Research 모드일 때만 파라미터 전달
+        useDeepResearchBackend ? activeParams : {}, // Quick Mode 또는 Deep Research Mode일 때 파라미터 전달
         abortControllerRef.current?.signal // Pass abort signal to cancel backend execution
       );
 

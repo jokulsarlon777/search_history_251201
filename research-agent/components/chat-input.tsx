@@ -75,7 +75,7 @@ export function ChatInput({
         >
           <Zap className={cn("h-4 w-4", useQuickMode && "animate-pulse")} />
           <span className="font-medium">
-            Quick {useQuickMode ? "ON" : "OFF"}
+            Quick Research {useQuickMode ? "ON" : "OFF"}
           </span>
         </Button>
 
