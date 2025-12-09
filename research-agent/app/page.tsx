@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Moon, Sun, Sparkles, Menu } from "lucide-react";
+import { Moon, Sun, Sparkles, Menu, FileText } from "lucide-react";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -12,11 +12,13 @@ import { ThreadSidebar } from "@/components/thread-sidebar";
 import { ConfigSettings } from "@/components/config-settings";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { ExportConversation } from "@/components/export-conversation";
+import { LogViewer } from "@/components/log-viewer";
 import type { ResearchStage } from "@/components/research-progress";
 import { ConversationSearch } from "@/components/conversation-search";
 import { useAppStore } from "@/store/app-store";
 import { useNetworkStatus } from "@/hooks/use-network-status";
 import { reactModeCache } from "@/lib/cache";
+import { logger } from "@/lib/logger";
 import {
   createLangGraphClient,
   createThread,
@@ -41,6 +43,7 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<number[]>([]);
   const [currentSearchIndex, setCurrentSearchIndex] = useState(0);
+  const [logViewerOpen, setLogViewerOpen] = useState(false);
   const { isOnline, wasOffline} = useNetworkStatus();
   const sourcesRef = useRef<Map<string, { title: string; url: string; snippet?: string }>>(new Map());
 
@@ -265,6 +268,8 @@ export default function Home() {
   const handleThreadSelect = async (threadId: string) => {
     if (threadId === currentThreadId) return;
 
+    logger.info('THREAD', 'Thread selected', { threadId });
+
     try {
       const threadMetadata = threads[threadId];
 
@@ -302,17 +307,22 @@ export default function Home() {
 
   // Handle thread deletion
   const handleThreadDelete = async (threadId: string) => {
+    logger.info('THREAD', 'Thread delete requested', { threadId });
+
     try {
       const client = createLangGraphClient(apiUrl || LANGGRAPH_API_URL, apiKey);
       const success = await deleteThreadApi(client, threadId);
 
       if (success) {
+        logger.info('THREAD', 'Thread deleted successfully', { threadId });
         deleteThread(threadId);
         toast.success("대화가 삭제되었습니다");
       } else {
+        logger.warn('THREAD', 'Thread delete failed', { threadId });
         toast.error("대화 삭제 실패");
       }
     } catch (error) {
+      logger.error('THREAD', 'Thread delete error', error as Error, { threadId });
       console.error("Failed to delete thread:", error);
       toast.error("대화 삭제 중 오류 발생");
     }
@@ -320,6 +330,8 @@ export default function Home() {
 
   // Handle new thread
   const handleNewThread = () => {
+    logger.info('THREAD', 'New thread created');
+    logger.logInteraction('thread_action', { content: 'new_thread' });
     reset();
     setUseQuickMode(false);
     toast.success("새 대화를 시작합니다");
@@ -334,6 +346,44 @@ export default function Home() {
         description: "진행 중인 리서치가 중단됩니다",
       });
     }
+  };
+
+  // Handle feedback
+  const handleFeedback = (messageIndex: number) => (rating: number, comment?: string) => {
+    const message = messages[messageIndex];
+    if (!message || message.role !== 'assistant') return;
+
+    // 피드백 로깅
+    logger.logFeedback({
+      rating,
+      comment,
+      messageId: `${currentThreadId}-${messageIndex}`,
+      threadId: currentThreadId || undefined,
+      mode: useQuickMode ? 'quick' : (useDeepResearchMode ? 'deep' : 'react'),
+      duration: message.duration,
+      answerPreview: message.content.slice(0, 200),
+    });
+
+    // 메시지에 피드백 저장
+    const updatedMessages = [...messages];
+    updatedMessages[messageIndex] = {
+      ...message,
+      feedback: {
+        rating,
+        comment,
+        timestamp: new Date().toISOString(),
+      },
+    };
+    setMessages(updatedMessages);
+
+    // Thread 메타데이터 업데이트
+    if (currentThreadId) {
+      updateThreadMetadata(currentThreadId, 'assistant', message.content);
+    }
+
+    toast.success("피드백 감사합니다!", {
+      description: `${rating}점을 주셨습니다`,
+    });
   };
 
   // Stage 전환 시 최소 표시 시간 보장 (React 모드 전용)
@@ -439,6 +489,13 @@ export default function Home() {
     // Store user question to filter it from responses
     const userQuestion = content.trim();
 
+    // 로그: 사용자 질문
+    logger.logInteraction('question', {
+      threadId: currentThreadId || undefined,
+      content: userQuestion,
+      mode: useQuickMode ? 'quick' : (useDeepResearchMode ? 'deep' : 'react'),
+    });
+
     try {
       setIsStreaming(true);
 
@@ -449,6 +506,10 @@ export default function Home() {
       if (!useDeepResearchMode && !useQuickMode) {
         const cached = reactModeCache.get(content);
         if (cached) {
+          logger.info('CACHE', 'Cache hit', {
+            query: content.slice(0, 50),
+            savedTime: cached.duration,
+          });
           console.log("💾 Cache hit! Returning cached response");
           const stats = reactModeCache.getStats();
           console.log(`📊 Cache stats: ${stats.hits} hits, ${stats.misses} misses, ${(stats.hitRate * 100).toFixed(1)}% hit rate`);
@@ -468,6 +529,7 @@ export default function Home() {
           setIsStreaming(false);
           return;
         }
+        logger.info('CACHE', 'Cache miss', { query: content.slice(0, 50) });
         console.log("🔍 Cache miss - fetching from server");
       }
 
@@ -485,6 +547,13 @@ export default function Home() {
       const useDeepResearchBackend = useQuickMode || useDeepResearchMode;
       const selectedApiUrl = useDeepResearchBackend ? (apiUrl || LANGGRAPH_API_URL) : REACT_AGENT_URL;
       const selectedAssistantId = useDeepResearchBackend ? (assistantId || LANGGRAPH_ASSISTANT_ID) : REACT_ASSISTANT_ID;
+
+      logger.info('API', 'API request started', {
+        mode: useQuickMode ? 'quick' : (useDeepResearchMode ? 'deep' : 'react'),
+        apiUrl: selectedApiUrl,
+        assistantId: selectedAssistantId,
+        threadId: currentThreadId,
+      });
 
       console.log("🎯 Mode Selection:", {
         useDeepResearchMode,
@@ -766,6 +835,23 @@ export default function Home() {
         // Collect sources
         const sources = Array.from(sourcesRef.current.values());
 
+        // 로그: API 응답 완료
+        logger.info('API', 'API request completed', {
+          duration,
+          mode: useQuickMode ? 'quick' : (useDeepResearchMode ? 'deep' : 'react'),
+          responseLength: bufferContent.length,
+          sourcesCount: sources.length,
+        });
+
+        // 로그: 사용자 상호작용 (답변)
+        logger.logInteraction('answer', {
+          threadId,
+          content: bufferContent,
+          mode: useQuickMode ? 'quick' : (useDeepResearchMode ? 'deep' : 'react'),
+          duration,
+          sources,
+        });
+
         // Add assistant message with duration and sources
         addMessage({
           role: "assistant",
@@ -788,6 +874,16 @@ export default function Home() {
       }
     } catch (error) {
       console.error("Error sending message:", error);
+
+      // 로그: 에러 발생
+      if (!abortControllerRef.current?.signal.aborted) {
+        logger.error('ERROR', 'API request failed', error as Error, {
+          mode: useQuickMode ? 'quick' : (useDeepResearchMode ? 'deep' : 'react'),
+          threadId: currentThreadId,
+          query: content.slice(0, 50),
+        });
+      }
+
       if (!abortControllerRef.current?.signal.aborted) {
         let errorMessage = "메시지 전송 중 오류가 발생했습니다";
         let errorDescription = "잠시 후 다시 시도해주세요";
@@ -866,6 +962,12 @@ export default function Home() {
         onPrevious={handlePreviousResult}
       />
 
+      {/* Log Viewer */}
+      <LogViewer
+        open={logViewerOpen}
+        onOpenChange={setLogViewerOpen}
+      />
+
       <div className="flex h-screen bg-background">
       {/* Sidebar */}
       {sidebarOpen && (
@@ -907,6 +1009,15 @@ export default function Home() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setLogViewerOpen(true)}
+                className="rounded-full"
+                title="로그 뷰어"
+              >
+                <FileText className="h-5 w-5" />
+              </Button>
               <ExportConversation
                 messages={messages}
                 threadTitle={currentThreadId ? threads[currentThreadId]?.title : "새 대화"}
@@ -952,6 +1063,7 @@ export default function Home() {
                     isEditable={message.role === "user" && index === messages.length - 2}
                     onEdit={(newContent) => handleEditMessage(index, newContent)}
                     onSuggestQuestion={handleSendMessage}
+                    onFeedback={message.role === "assistant" ? handleFeedback(index) : undefined}
                   />
                 </div>
               ))}

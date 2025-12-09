@@ -6,6 +6,12 @@ export interface Source {
   snippet?: string;
 }
 
+export interface Feedback {
+  rating: number; // 1-5 stars
+  comment?: string; // Optional user comment
+  timestamp: string;
+}
+
 export interface Message {
   role: "user" | "assistant";
   content: string;
@@ -13,6 +19,7 @@ export interface Message {
   tags?: string[];
   duration?: number; // Duration in milliseconds for assistant messages
   sources?: Source[]; // Sources/citations used in the response
+  feedback?: Feedback; // User feedback for assistant messages (Beta)
 }
 
 export interface Thread {

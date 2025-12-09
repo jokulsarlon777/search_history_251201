@@ -1,6 +1,7 @@
 "use client";
 
 import { create } from "zustand";
+import { logger } from "@/lib/logger";
 import type { Message, ThreadMetadata, DeepResearchParams } from "@/lib/types";
 
 interface AppStore {
@@ -220,8 +221,34 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setAssistantId: (id) => set({ assistantId: id }),
   setApiKey: (key) => set({ apiKey: key }),
   setDeepResearchParams: (params) => set({ deepResearchParams: params }),
-  setUseQuickMode: (useQuickMode) => set({ useQuickMode, useDeepResearchMode: useQuickMode ? false : get().useDeepResearchMode }),
-  setUseDeepResearchMode: (useDeepResearchMode) => set({ useDeepResearchMode, useQuickMode: useDeepResearchMode ? false : get().useQuickMode }),
+
+  setUseQuickMode: (useQuickMode) => {
+    const currentMode = get().useQuickMode;
+    if (currentMode !== useQuickMode) {
+      logger.info('USER', 'Mode changed', {
+        from: currentMode ? 'quick' : (get().useDeepResearchMode ? 'deep' : 'react'),
+        to: useQuickMode ? 'quick' : (get().useDeepResearchMode ? 'deep' : 'react'),
+      });
+      logger.logInteraction('mode_change', {
+        mode: useQuickMode ? 'quick' : 'react',
+      });
+    }
+    set({ useQuickMode, useDeepResearchMode: useQuickMode ? false : get().useDeepResearchMode });
+  },
+
+  setUseDeepResearchMode: (useDeepResearchMode) => {
+    const currentMode = get().useDeepResearchMode;
+    if (currentMode !== useDeepResearchMode) {
+      logger.info('USER', 'Mode changed', {
+        from: get().useQuickMode ? 'quick' : (currentMode ? 'deep' : 'react'),
+        to: useDeepResearchMode ? 'deep' : (get().useQuickMode ? 'quick' : 'react'),
+      });
+      logger.logInteraction('mode_change', {
+        mode: useDeepResearchMode ? 'deep' : 'react',
+      });
+    }
+    set({ useDeepResearchMode, useQuickMode: useDeepResearchMode ? false : get().useQuickMode });
+  },
 
   getActiveParams: () => {
     const state = get();

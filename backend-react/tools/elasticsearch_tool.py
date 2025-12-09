@@ -163,9 +163,22 @@ def elasticsearch_search(query: str, index: Optional[str] = None, max_results: i
         result_format = index_config.get("result_format", {})
         format_type = result_format.get("type", "document")
 
+        # 원본 데이터 수집 (테이블 표시용)
+        raw_results = []
+
         for i, hit in enumerate(hits, 1):
             source = hit["_source"]
             score = hit["_score"]
+
+            # 원본 데이터 저장
+            raw_results.append({
+                "rank": i,
+                "score": round(score, 2),
+                "index": hit["_index"],
+                "id": hit.get("_id", ""),
+                "source": source,
+                "format_type": format_type
+            })
 
             # 설정 기반 결과 포맷팅
             if format_type == "vehicle":
@@ -201,10 +214,24 @@ def elasticsearch_search(query: str, index: Optional[str] = None, max_results: i
 
             results.append(result_text)
 
+        # JSON 블록 추가 (프론트엔드 테이블 표시용)
+        search_metadata = {
+            "total_hits": total_hits,
+            "returned_hits": len(hits),
+            "index": index,
+            "query": query,
+            "results": raw_results
+        }
+
+        formatted_text = "".join(results)
+        formatted_text += "\n\n```json:search_results\n"
+        formatted_text += json.dumps(search_metadata, ensure_ascii=False, indent=2)
+        formatted_text += "\n```\n"
+
         total_duration = time.time() - start_time
         logger.info(f"✅ Search completed successfully in {total_duration:.3f}s")
 
-        return "".join(results)
+        return formatted_text
 
     except Exception as e:
         error_msg = str(e)

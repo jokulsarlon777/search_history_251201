@@ -13,6 +13,8 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { SourceCitation } from "@/components/source-citation";
 import { ResearchProgress, type ResearchStage } from "@/components/research-progress";
+import { SearchResultsTable } from "@/components/search-results-table";
+import { FeedbackRating } from "@/components/feedback-rating";
 import {
   SuggestedQuestions,
   ConclusionCard,
@@ -24,6 +26,25 @@ import {
 import type { Message } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
+// Extract search results JSON from message content
+function extractSearchResults(content: string): any | null {
+  const regex = /```json:search_results\n([\s\S]*?)\n```/;
+  const match = content.match(regex);
+  if (!match || !match[1]) return null;
+
+  try {
+    return JSON.parse(match[1]);
+  } catch (error) {
+    console.error("Failed to parse search results JSON:", error);
+    return null;
+  }
+}
+
+// Remove search results JSON block from content
+function removeSearchResultsBlock(content: string): string {
+  return content.replace(/```json:search_results\n[\s\S]*?\n```/g, '').trim();
+}
+
 interface ChatMessageProps {
   message: Message;
   className?: string;
@@ -32,6 +53,7 @@ interface ChatMessageProps {
   researchStage?: ResearchStage | null;
   isStreaming?: boolean;
   onSuggestQuestion?: (question: string) => void;
+  onFeedback?: (rating: number, comment?: string) => void;
 }
 
 function CodeBlock({ inline, className, children, ...props }: any) {
@@ -96,18 +118,20 @@ export const ChatMessage = memo(function ChatMessage({
   isEditable = false,
   researchStage = null,
   isStreaming = false,
-  onSuggestQuestion
+  onSuggestQuestion,
+  onFeedback
 }: ChatMessageProps) {
   const [copied, setCopied] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState(message.content);
   const isUser = message.role === "user";
 
-  // Extract suggested questions and conclusion from assistant messages
+  // Extract suggested questions, conclusion, and search results from assistant messages
   const suggestedQuestions = !isUser ? extractSuggestedQuestions(message.content) : [];
   const conclusion = !isUser ? extractConclusion(message.content) : null;
+  const searchResults = !isUser ? extractSearchResults(message.content) : null;
 
-  // Remove both conclusion and suggested questions sections from main content
+  // Remove conclusion, suggested questions, and search results sections from main content
   let displayContent = message.content;
   if (!isUser) {
     if (conclusion) {
@@ -115,6 +139,9 @@ export const ChatMessage = memo(function ChatMessage({
     }
     if (suggestedQuestions.length > 0) {
       displayContent = removeSuggestedQuestionsSection(displayContent);
+    }
+    if (searchResults) {
+      displayContent = removeSearchResultsBlock(displayContent);
     }
   }
 
@@ -310,6 +337,10 @@ export const ChatMessage = memo(function ChatMessage({
               {message.sources && message.sources.length > 0 && (
                 <SourceCitation sources={message.sources} />
               )}
+              {/* Search Results Table */}
+              {!isUser && searchResults && !isStreaming && (
+                <SearchResultsTable metadata={searchResults} />
+              )}
               {/* Conclusion Card */}
               {!isUser && conclusion && !isStreaming && (
                 <div className="mt-4">
@@ -322,6 +353,15 @@ export const ChatMessage = memo(function ChatMessage({
                   <SuggestedQuestions
                     questions={suggestedQuestions}
                     onQuestionClick={onSuggestQuestion}
+                  />
+                </div>
+              )}
+              {/* Feedback Rating (Beta) */}
+              {!isUser && onFeedback && !isStreaming && message.content && (
+                <div className="mt-4">
+                  <FeedbackRating
+                    onSubmit={onFeedback}
+                    existingFeedback={message.feedback}
                   />
                 </div>
               )}
