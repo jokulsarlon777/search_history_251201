@@ -18,6 +18,8 @@ interface ServerHealth {
   status: "online" | "offline" | "error";
   responseTime?: number;
   error?: string;
+  version?: string;
+  clusterName?: string;
 }
 
 interface HealthResponse {
@@ -26,6 +28,7 @@ interface HealthResponse {
   servers: {
     reactAgent: ServerHealth;
     researchAgent: ServerHealth;
+    elasticsearch: ServerHealth;
   };
 }
 
@@ -81,7 +84,8 @@ export function ServerHealth() {
   };
 
   const allOnline = health?.servers.reactAgent.status === "online" &&
-                    health?.servers.researchAgent.status === "online";
+                    health?.servers.researchAgent.status === "online" &&
+                    health?.servers.elasticsearch.status === "online";
 
   return (
     <>
@@ -195,6 +199,53 @@ export function ServerHealth() {
                 {health.servers.researchAgent.error && (
                   <div className="text-xs text-red-500 mt-1">
                     오류: {health.servers.researchAgent.error}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Elasticsearch 서버 */}
+            {health?.servers.elasticsearch && (
+              <div className="p-4 bg-white dark:bg-zinc-800 border-2 border-gray-300 dark:border-zinc-600 rounded-lg">
+                <div className="flex items-start justify-between mb-2">
+                  <div>
+                    <div className="font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                      {getStatusIcon(health.servers.elasticsearch.status)}
+                      Elasticsearch
+                    </div>
+                    <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                      {health.servers.elasticsearch.url}
+                    </div>
+                  </div>
+                  <Badge
+                    variant="outline"
+                    className={`${
+                      health.servers.elasticsearch.status === "online"
+                        ? "border-green-500 text-green-500"
+                        : "border-red-500 text-red-500"
+                    }`}
+                  >
+                    {health.servers.elasticsearch.status}
+                  </Badge>
+                </div>
+                {health.servers.elasticsearch.responseTime && (
+                  <div className="text-xs text-gray-600 dark:text-gray-400">
+                    응답 시간: {health.servers.elasticsearch.responseTime}ms
+                  </div>
+                )}
+                {health.servers.elasticsearch.version && (
+                  <div className="text-xs text-gray-600 dark:text-gray-400">
+                    버전: {health.servers.elasticsearch.version}
+                  </div>
+                )}
+                {health.servers.elasticsearch.clusterName && (
+                  <div className="text-xs text-gray-600 dark:text-gray-400">
+                    클러스터: {health.servers.elasticsearch.clusterName}
+                  </div>
+                )}
+                {health.servers.elasticsearch.error && (
+                  <div className="text-xs text-red-500 mt-1">
+                    오류: {health.servers.elasticsearch.error}
                   </div>
                 )}
               </div>

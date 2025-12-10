@@ -12,6 +12,7 @@ import {
 import type { Message } from "@/lib/types";
 import { toast } from "sonner";
 import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 
 interface ExportConversationProps {
   messages: Message[];
@@ -43,7 +44,9 @@ export function ExportConversation({ messages, threadTitle = "대화" }: ExportC
         }
       });
 
-      const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
+      // UTF-8 BOM 추가로 Windows 메모장 등에서 한글 정상 표시
+      const BOM = '\uFEFF';
+      const blob = new Blob([BOM + markdown], { type: "text/markdown;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -108,85 +111,136 @@ export function ExportConversation({ messages, threadTitle = "대화" }: ExportC
       setIsExporting(true);
       toast.info("PDF 생성 중...", { description: "잠시만 기다려주세요" });
 
+      // HTML 콘텐츠 생성 (한글 폰트 포함)
+      const contentDiv = document.createElement("div");
+      contentDiv.style.width = "800px";
+      contentDiv.style.padding = "40px";
+      contentDiv.style.backgroundColor = "white";
+      contentDiv.style.fontFamily = "'Noto Sans KR', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif";
+      contentDiv.style.position = "absolute";
+      contentDiv.style.left = "-9999px";
+      contentDiv.style.top = "0";
+
+      // 제목
+      const titleEl = document.createElement("h1");
+      titleEl.textContent = threadTitle;
+      titleEl.style.fontSize = "24px";
+      titleEl.style.fontWeight = "bold";
+      titleEl.style.marginBottom = "10px";
+      titleEl.style.color = "#000";
+      contentDiv.appendChild(titleEl);
+
+      // 날짜
+      const dateEl = document.createElement("p");
+      dateEl.textContent = `생성일: ${new Date().toLocaleString('ko-KR')}`;
+      dateEl.style.fontSize = "12px";
+      dateEl.style.color = "#666";
+      dateEl.style.marginBottom = "30px";
+      contentDiv.appendChild(dateEl);
+
+      // 구분선
+      const hr1 = document.createElement("hr");
+      hr1.style.border = "none";
+      hr1.style.borderTop = "2px solid #ddd";
+      hr1.style.marginBottom = "30px";
+      contentDiv.appendChild(hr1);
+
+      // 메시지
+      messages.forEach((message, index) => {
+        const messageDiv = document.createElement("div");
+        messageDiv.style.marginBottom = "30px";
+
+        // 역할
+        const roleEl = document.createElement("div");
+        roleEl.textContent = message.role === "user" ? "👤 사용자" : "🤖 AI";
+        roleEl.style.fontSize = "14px";
+        roleEl.style.fontWeight = "bold";
+        roleEl.style.marginBottom = "8px";
+        roleEl.style.color = message.role === "user" ? "#0066cc" : "#00aa00";
+        messageDiv.appendChild(roleEl);
+
+        // 내용
+        const contentEl = document.createElement("div");
+        contentEl.textContent = message.content;
+        contentEl.style.fontSize = "12px";
+        contentEl.style.lineHeight = "1.6";
+        contentEl.style.color = "#000";
+        contentEl.style.whiteSpace = "pre-wrap";
+        contentEl.style.wordBreak = "break-word";
+        messageDiv.appendChild(contentEl);
+
+        // 타임스탬프
+        if (message.timestamp) {
+          const timeEl = document.createElement("div");
+          timeEl.textContent = new Date(message.timestamp).toLocaleString('ko-KR');
+          timeEl.style.fontSize = "10px";
+          timeEl.style.color = "#999";
+          timeEl.style.marginTop = "8px";
+          messageDiv.appendChild(timeEl);
+        }
+
+        contentDiv.appendChild(messageDiv);
+
+        // 구분선
+        if (index < messages.length - 1) {
+          const hr = document.createElement("hr");
+          hr.style.border = "none";
+          hr.style.borderTop = "1px solid #eee";
+          hr.style.margin = "20px 0";
+          contentDiv.appendChild(hr);
+        }
+      });
+
+      // DOM에 추가
+      document.body.appendChild(contentDiv);
+
+      // Canvas로 변환 (고해상도로 한글 렌더링)
+      const canvas = await html2canvas(contentDiv, {
+        scale: 2, // 고해상도
+        useCORS: true,
+        logging: false,
+        backgroundColor: "#ffffff",
+      });
+
+      // DOM에서 제거
+      document.body.removeChild(contentDiv);
+
+      // PDF 생성
+      const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF({
         orientation: "portrait",
         unit: "mm",
         format: "a4",
       });
 
-      // Configure PDF
       const pageWidth = pdf.internal.pageSize.getWidth();
       const pageHeight = pdf.internal.pageSize.getHeight();
-      const margin = 20;
-      const lineHeight = 7;
-      let yPosition = margin;
+      const imgWidth = pageWidth;
+      const imgHeight = (canvas.height * pageWidth) / canvas.width;
 
-      // Title
-      pdf.setFontSize(20);
-      pdf.setFont("helvetica", "bold");
-      pdf.text(threadTitle, margin, yPosition);
-      yPosition += lineHeight * 2;
+      let heightLeft = imgHeight;
+      let position = 0;
 
-      // Date
-      pdf.setFontSize(10);
-      pdf.setFont("helvetica", "normal");
-      pdf.text(`생성일: ${new Date().toLocaleString('ko-KR')}`, margin, yPosition);
-      yPosition += lineHeight * 2;
+      // 첫 페이지 추가
+      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
 
-      // Messages
-      messages.forEach((message, index) => {
-        // Check if need new page
-        if (yPosition > pageHeight - margin * 2) {
-          pdf.addPage();
-          yPosition = margin;
-        }
+      // 여러 페이지로 나누기
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
 
-        // Role
-        pdf.setFontSize(12);
-        pdf.setFont("helvetica", "bold");
-        const role = message.role === "user" ? "[사용자]" : "[AI]";
-        pdf.text(role, margin, yPosition);
-        yPosition += lineHeight;
-
-        // Content
-        pdf.setFontSize(10);
-        pdf.setFont("helvetica", "normal");
-
-        // Split content into lines that fit the page width
-        const lines = pdf.splitTextToSize(message.content, pageWidth - margin * 2);
-        lines.forEach((line: string) => {
-          if (yPosition > pageHeight - margin * 2) {
-            pdf.addPage();
-            yPosition = margin;
-          }
-          pdf.text(line, margin, yPosition);
-          yPosition += lineHeight;
-        });
-
-        // Timestamp
-        if (message.timestamp) {
-          pdf.setFontSize(8);
-          pdf.setTextColor(128, 128, 128);
-          pdf.text(new Date(message.timestamp).toLocaleString('ko-KR'), margin, yPosition);
-          pdf.setTextColor(0, 0, 0);
-          yPosition += lineHeight;
-        }
-
-        // Separator
-        if (index < messages.length - 1) {
-          yPosition += lineHeight * 0.5;
-          pdf.setDrawColor(200, 200, 200);
-          pdf.line(margin, yPosition, pageWidth - margin, yPosition);
-          yPosition += lineHeight * 1.5;
-        }
-      });
-
-      // Save PDF
+      // 저장
       pdf.save(`${threadTitle}_${new Date().toISOString().split('T')[0]}.pdf`);
       toast.success("PDF 파일로 내보내기 완료");
     } catch (error) {
       console.error("PDF export error:", error);
-      toast.error("PDF 내보내기 실패");
+      toast.error("PDF 내보내기 실패", {
+        description: "문제가 지속되면 Markdown 형식을 사용해주세요"
+      });
     } finally {
       setIsExporting(false);
     }

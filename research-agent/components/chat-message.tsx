@@ -145,6 +145,12 @@ export const ChatMessage = memo(function ChatMessage({
     }
   }
 
+  // 이스케이프된 줄바꿈 문자를 실제 줄바꿈으로 변환
+  // LLM이 \n\n을 리터럴 문자열로 반환하는 경우 처리
+  displayContent = displayContent
+    .replace(/\\n\\n/g, '\n\n')  // 이중 줄바꿈
+    .replace(/\\n/g, '\n');      // 단일 줄바꿈
+
   const handleCopy = async () => {
     await navigator.clipboard.writeText(message.content);
     setCopied(true);
