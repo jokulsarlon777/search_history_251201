@@ -15,6 +15,8 @@ import { ExportConversation } from "@/components/export-conversation";
 import { LogViewer } from "@/components/log-viewer";
 import { ServerHealth } from "@/components/server-health";
 import type { ResearchStage } from "@/components/research-progress";
+import { ResearchStageStepper } from "@/components/research-stage-stepper";
+import { IntermediateResultsDisplay } from "@/components/intermediate-results-display";
 import { ConversationSearch } from "@/components/conversation-search";
 import { useAppStore } from "@/store/app-store";
 import { useNetworkStatus } from "@/hooks/use-network-status";
@@ -56,6 +58,13 @@ export default function Home() {
   // Stage 전환 타이밍 관리
   const lastStageChangeRef = useRef<number>(0);
   const stageTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // 경과 시간 추적
+  const startTimeRef = useRef<number>(0);
+  const elapsedTimeIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // 완료된 단계 추적
+  const [completedStages, setCompletedStages] = useState<string[]>([]);
 
   const {
     messages,
@@ -402,12 +411,28 @@ export default function Home() {
     if (remaining > 0) {
       // 최소 시간이 남아있으면 딜레이 후 전환
       stageTimerRef.current = setTimeout(() => {
-        setResearchStage(newStage);
+        setResearchStage(prev => {
+          // 이전 stage를 완료 목록에 추가
+          if (prev && prev.stage !== newStage.stage) {
+            setCompletedStages(stages =>
+              stages.includes(prev.stage) ? stages : [...stages, prev.stage]
+            );
+          }
+          return newStage;
+        });
         lastStageChangeRef.current = Date.now();
       }, remaining);
     } else {
       // 즉시 전환
-      setResearchStage(newStage);
+      setResearchStage(prev => {
+        // 이전 stage를 완료 목록에 추가
+        if (prev && prev.stage !== newStage.stage) {
+          setCompletedStages(stages =>
+            stages.includes(prev.stage) ? stages : [...stages, prev.stage]
+          );
+        }
+        return newStage;
+      });
       lastStageChangeRef.current = now;
     }
   };
@@ -537,10 +562,44 @@ export default function Home() {
 
       // Initialize streaming state
       setStreamingContent("");
-      setResearchStage({ stage: "planning", message: "리서치 계획을 수립하고 있습니다..." });
       setIntermediateResults({}); // Clear intermediate results for new message
+      setCompletedStages([]); // Clear completed stages
       let bufferContent = "";
       sourcesRef.current.clear(); // Clear sources for new message
+
+      // 경과 시간 추적 시작
+      startTimeRef.current = Date.now();
+
+      // 모드별 예상 시간 설정 (ms)
+      const estimatedTimes: Record<string, number> = {
+        react: 5000,      // React Agent: 5초
+        quick: 20000,     // Quick Mode: 20초
+        deep: 120000,     // Deep Research: 2분
+      };
+
+      const currentMode = useQuickMode ? 'quick' : (useDeepResearchMode ? 'deep' : 'react');
+      const estimatedTime = estimatedTimes[currentMode];
+
+      // 경과 시간 업데이트 인터벌 시작 (1초마다)
+      if (elapsedTimeIntervalRef.current) {
+        clearInterval(elapsedTimeIntervalRef.current);
+      }
+      elapsedTimeIntervalRef.current = setInterval(() => {
+        const elapsed = Date.now() - startTimeRef.current;
+        const remaining = Math.max(0, estimatedTime - elapsed);
+        setResearchStage(prev => prev ? {
+          ...prev,
+          elapsedTime: elapsed,
+          estimatedTime: remaining,
+        } : null);
+      }, 1000);
+
+      setResearchStage({
+        stage: "planning",
+        message: "리서치 계획을 수립하고 있습니다...",
+        elapsedTime: 0,
+        estimatedTime,
+      });
 
       // Mode 확인 및 적절한 서버/Assistant 선택
       const REACT_AGENT_URL = process.env.NEXT_PUBLIC_REACT_AGENT_URL || "http://127.0.0.1:2025";
@@ -702,9 +761,16 @@ export default function Home() {
               const metadataStr = JSON.stringify(metadata).toLowerCase();
 
               if (metadataStr.includes("research") || metadataStr.includes("search")) {
-                setResearchStage({
-                  stage: "researching",
-                  message: "웹 리서치를 진행하고 있습니다...",
+                setResearchStage(prev => {
+                  if (prev && prev.stage !== "researching") {
+                    setCompletedStages(stages =>
+                      stages.includes(prev.stage) ? stages : [...stages, prev.stage]
+                    );
+                  }
+                  return {
+                    stage: "researching",
+                    message: "웹 리서치를 진행하고 있습니다...",
+                  };
                 });
                 // 중간 결과 업데이트
                 setIntermediateResults(prev => ({
@@ -712,18 +778,32 @@ export default function Home() {
                   currentStep: "문서 검색 중...",
                 }));
               } else if (metadataStr.includes("analyz")) {
-                setResearchStage({
-                  stage: "analyzing",
-                  message: "수집된 정보를 분석하고 있습니다...",
+                setResearchStage(prev => {
+                  if (prev && prev.stage !== "analyzing") {
+                    setCompletedStages(stages =>
+                      stages.includes(prev.stage) ? stages : [...stages, prev.stage]
+                    );
+                  }
+                  return {
+                    stage: "analyzing",
+                    message: "수집된 정보를 분석하고 있습니다...",
+                  };
                 });
                 setIntermediateResults(prev => ({
                   ...prev,
                   currentStep: "정보 분석 및 검증 중...",
                 }));
               } else if (metadataStr.includes("writ") || metadataStr.includes("generat")) {
-                setResearchStage({
-                  stage: "writing",
-                  message: "최종 답변을 작성하고 있습니다...",
+                setResearchStage(prev => {
+                  if (prev && prev.stage !== "writing") {
+                    setCompletedStages(stages =>
+                      stages.includes(prev.stage) ? stages : [...stages, prev.stage]
+                    );
+                  }
+                  return {
+                    stage: "writing",
+                    message: "최종 답변을 작성하고 있습니다...",
+                  };
                 });
                 setIntermediateResults(prev => ({
                   ...prev,
@@ -786,9 +866,16 @@ export default function Home() {
           if (chunk.event === "messages/partial") {
             const message = chunk.data?.[0];
             if (message?.content && typeof message.content === "string") {
-              setResearchStage({
-                stage: "writing",
-                message: "답변을 생성하고 있습니다...",
+              setResearchStage(prev => {
+                if (prev && prev.stage !== "writing") {
+                  setCompletedStages(stages =>
+                    stages.includes(prev.stage) ? stages : [...stages, prev.stage]
+                  );
+                }
+                return {
+                  stage: "writing",
+                  message: "답변을 생성하고 있습니다...",
+                };
               });
               scheduleUpdate(message.content);
             }
@@ -852,9 +939,17 @@ export default function Home() {
                       }
                     } else {
                       // Deep Research 모드는 기존 로직 유지
-                      setResearchStage({
-                        stage: "writing",
-                        message: "답변을 생성하고 있습니다...",
+                      setResearchStage(prev => {
+                        // 이전 stage를 완료 목록에 추가
+                        if (prev && prev.stage !== "writing") {
+                          setCompletedStages(stages =>
+                            stages.includes(prev.stage) ? stages : [...stages, prev.stage]
+                          );
+                        }
+                        return {
+                          stage: "writing",
+                          message: "답변을 생성하고 있습니다...",
+                        };
                       });
                     }
 
@@ -1003,9 +1098,14 @@ export default function Home() {
         clearTimeout(stageTimerRef.current);
         stageTimerRef.current = null;
       }
+      if (elapsedTimeIntervalRef.current) {
+        clearInterval(elapsedTimeIntervalRef.current);
+        elapsedTimeIntervalRef.current = null;
+      }
       setStreamingContent("");
       setResearchStage(null);
       setIntermediateResults({}); // Clear intermediate results
+      setCompletedStages([]); // Clear completed stages
       abortControllerRef.current = null;
       setIsStreaming(false);
     }
@@ -1134,6 +1234,27 @@ export default function Home() {
               ))}
               {(isStreaming || streamingContent) && (
                 <div className="fade-in space-y-4">
+                  {/* Stage Stepper - shows overall progress for Quick/Deep modes */}
+                  {(useQuickMode || useDeepResearchMode) && researchStage && (
+                    <ResearchStageStepper
+                      stages={[
+                        { id: 'planning', label: '계획 수립' },
+                        { id: 'thinking', label: 'AI 사고' },
+                        { id: 'searching', label: '검색' },
+                        { id: 'researching', label: '리서치' },
+                        { id: 'analyzing', label: '분석' },
+                        { id: 'writing', label: '작성' },
+                      ]}
+                      currentStage={researchStage.stage}
+                      completedStages={completedStages}
+                    />
+                  )}
+
+                  {/* Intermediate Results - shows real-time findings */}
+                  {Object.keys(intermediateResults).length > 0 && (
+                    <IntermediateResultsDisplay results={intermediateResults} />
+                  )}
+
                   <ChatMessage
                     message={{
                       role: "assistant",

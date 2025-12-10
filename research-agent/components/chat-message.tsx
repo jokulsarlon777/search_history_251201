@@ -6,7 +6,7 @@ import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark, oneLight } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { useTheme } from "next-themes";
-import { UserRound, Sparkles, Copy, CheckCheck, Clock, PencilLine, X as XIcon, SendHorizontal } from "lucide-react";
+import { UserRound, Sparkles, Copy, CheckCheck, Clock, PencilLine, X as XIcon, SendHorizontal, Send } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";

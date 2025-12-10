@@ -1,7 +1,7 @@
 "use client";
 
 import { memo } from "react";
-import { Loader2, SearchCheck, Lightbulb, Pencil, CheckCircle2, Brain, Database, AlertCircle } from "lucide-react";
+import { Loader2, SearchCheck, Lightbulb, Pencil, CheckCircle2, Brain, Database, AlertCircle, Clock, Timer } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
@@ -13,11 +13,22 @@ export interface ResearchStage {
   total?: number;
   message?: string;
   error?: string;
+  elapsedTime?: number;
+  estimatedTime?: number;
 }
 
 interface ResearchProgressProps {
   researchStage: ResearchStage | null;
   className?: string;
+}
+
+// 시간 포맷 함수
+function formatElapsedTime(ms: number): string {
+  const seconds = Math.floor(ms / 1000);
+  if (seconds < 60) return `${seconds}초`;
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  return `${minutes}분 ${remainingSeconds}초`;
 }
 
 const stageConfig = {
@@ -136,7 +147,7 @@ export const ResearchProgress = memo(function ResearchProgress({
             </div>
 
             {(researchStage.error || researchStage.message) && (
-              <div className="space-y-1">
+              <div className="space-y-1.5">
                 <p className={cn(
                   "text-xs leading-relaxed",
                   researchStage.error ? "text-red-600 dark:text-red-400 font-medium" : "text-muted-foreground",
@@ -147,6 +158,27 @@ export const ResearchProgress = memo(function ResearchProgress({
                     <span className="inline-block ml-1 animate-bounce">...</span>
                   )}
                 </p>
+
+                {/* 경과 시간 & 예상 시간 */}
+                {!researchStage.error && (researchStage.elapsedTime !== undefined || researchStage.estimatedTime !== undefined) && (
+                  <div className="flex items-center gap-3 text-xs">
+                    {researchStage.elapsedTime !== undefined && (
+                      <div className="flex items-center gap-1 text-muted-foreground">
+                        <Clock className="h-3 w-3" />
+                        <span>경과: {formatElapsedTime(researchStage.elapsedTime)}</span>
+                      </div>
+                    )}
+                    {researchStage.estimatedTime !== undefined && researchStage.estimatedTime > 0 && (
+                      <div className="flex items-center gap-1 text-primary">
+                        <Timer className="h-3 w-3" />
+                        <span className="font-medium">
+                          약 {Math.ceil(researchStage.estimatedTime / 1000)}초 남음
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Thinking/Searching 중일 때 추가 안내 */}
                 {isThinkingOrSearching && !researchStage.error && (
                   <p className="text-[10px] text-muted-foreground/60 italic">

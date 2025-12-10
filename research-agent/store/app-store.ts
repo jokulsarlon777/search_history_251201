@@ -167,6 +167,16 @@ export const useAppStore = create<AppStore>((set, get) => ({
       // Create new thread metadata
       const title =
         content.length > 30 ? content.slice(0, 30) + "..." : content;
+
+      // Determine server type based on current mode settings
+      const serverType = state.useDeepResearchMode || state.useQuickMode ? "research" : "react";
+      const apiUrl = serverType === "react"
+        ? (process.env.NEXT_PUBLIC_REACT_AGENT_URL || "http://127.0.0.1:2025")
+        : (process.env.NEXT_PUBLIC_LANGGRAPH_URL || "http://127.0.0.1:2024");
+      const assistantId = serverType === "react"
+        ? (process.env.NEXT_PUBLIC_REACT_ASSISTANT_ID || "react_agent")
+        : (process.env.NEXT_PUBLIC_LANGGRAPH_ASSISTANT_ID || "Deep Researcher");
+
       set({
         threads: {
           ...state.threads,
@@ -181,6 +191,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
                 timestamp: new Date().toISOString(),
               },
             ],
+            server_type: serverType,
+            api_url: apiUrl,
+            assistant_id: assistantId,
           },
         },
       });
