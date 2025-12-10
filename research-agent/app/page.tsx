@@ -13,6 +13,7 @@ import { ConfigSettings } from "@/components/config-settings";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { ExportConversation } from "@/components/export-conversation";
 import { LogViewer } from "@/components/log-viewer";
+import { ServerHealth } from "@/components/server-health";
 import type { ResearchStage } from "@/components/research-progress";
 import { ConversationSearch } from "@/components/conversation-search";
 import { useAppStore } from "@/store/app-store";
@@ -39,6 +40,7 @@ export default function Home() {
   const [streamingContent, setStreamingContent] = useState<string>("");
   const updateTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [researchStage, setResearchStage] = useState<ResearchStage | null>(null);
+  const [intermediateResults, setIntermediateResults] = useState<Record<string, any>>({});
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<number[]>([]);
@@ -536,6 +538,7 @@ export default function Home() {
       // Initialize streaming state
       setStreamingContent("");
       setResearchStage({ stage: "planning", message: "리서치 계획을 수립하고 있습니다..." });
+      setIntermediateResults({}); // Clear intermediate results for new message
       let bufferContent = "";
       sourcesRef.current.clear(); // Clear sources for new message
 
@@ -703,16 +706,75 @@ export default function Home() {
                   stage: "researching",
                   message: "웹 리서치를 진행하고 있습니다...",
                 });
+                // 중간 결과 업데이트
+                setIntermediateResults(prev => ({
+                  ...prev,
+                  currentStep: "문서 검색 중...",
+                }));
               } else if (metadataStr.includes("analyz")) {
                 setResearchStage({
                   stage: "analyzing",
                   message: "수집된 정보를 분석하고 있습니다...",
                 });
+                setIntermediateResults(prev => ({
+                  ...prev,
+                  currentStep: "정보 분석 및 검증 중...",
+                }));
               } else if (metadataStr.includes("writ") || metadataStr.includes("generat")) {
                 setResearchStage({
                   stage: "writing",
                   message: "최종 답변을 작성하고 있습니다...",
                 });
+                setIntermediateResults(prev => ({
+                  ...prev,
+                  currentStep: "종합 답변 생성 중...",
+                }));
+              }
+
+              // Extract intermediate results from metadata
+              try {
+                // 문서 개수 추출
+                if (metadata.documents || metadata.results) {
+                  const docs = metadata.documents || metadata.results;
+                  if (Array.isArray(docs)) {
+                    setIntermediateResults(prev => ({
+                      ...prev,
+                      documentsFound: docs.length,
+                    }));
+                  } else if (typeof docs === 'number') {
+                    setIntermediateResults(prev => ({
+                      ...prev,
+                      documentsFound: docs,
+                    }));
+                  }
+                }
+
+                // 키워드 추출
+                if (metadata.keywords) {
+                  const keywords = Array.isArray(metadata.keywords)
+                    ? metadata.keywords
+                    : metadata.keywords.split(',').map((k: string) => k.trim());
+                  setIntermediateResults(prev => ({
+                    ...prev,
+                    keywords: keywords.slice(0, 8),
+                  }));
+                }
+
+                // 관련도 점수 추출
+                if (metadata.relevance || metadata.score) {
+                  const score = metadata.relevance || metadata.score;
+                  const relevanceScore = typeof score === 'number'
+                    ? Math.round(score * 100)
+                    : parseInt(score);
+                  if (!isNaN(relevanceScore)) {
+                    setIntermediateResults(prev => ({
+                      ...prev,
+                      relevanceScore,
+                    }));
+                  }
+                }
+              } catch (error) {
+                console.error("Failed to extract intermediate results:", error);
               }
 
               // Extract sources from metadata/updates
@@ -831,6 +893,7 @@ export default function Home() {
       if (bufferContent) {
         // Clear streaming state
         setStreamingContent("");
+        setIntermediateResults({}); // Clear intermediate results
 
         // Collect sources
         const sources = Array.from(sourcesRef.current.values());
@@ -942,6 +1005,7 @@ export default function Home() {
       }
       setStreamingContent("");
       setResearchStage(null);
+      setIntermediateResults({}); // Clear intermediate results
       abortControllerRef.current = null;
       setIsStreaming(false);
     }
@@ -1009,6 +1073,7 @@ export default function Home() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <ServerHealth />
               <Button
                 variant="outline"
                 size="icon"
@@ -1068,7 +1133,7 @@ export default function Home() {
                 </div>
               ))}
               {(isStreaming || streamingContent) && (
-                <div className="fade-in">
+                <div className="fade-in space-y-4">
                   <ChatMessage
                     message={{
                       role: "assistant",
