@@ -1,0 +1,104 @@
+version: '3.8'
+
+services:
+  # Elasticsearch
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    networks:
+      - research-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # React Agent Backend (Port 2025)
+  react-agent:
+    build:
+      context: ./open_react_agent
+      dockerfile: Dockerfile
+    container_name: react-agent
+    ports:
+      - "2025:2025"
+    environment:
+      - PORT=2025
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - research-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:2025/ok || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Deep Research Agent Backend (Port 2024)
+  deep-research-agent:
+    build:
+      context: ./open_deep_research
+      dockerfile: Dockerfile
+    container_name: deep-research-agent
+    ports:
+      - "2024:2024"
+    environment:
+      - PORT=2024
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - research-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:2024/ok || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Next.js Frontend (Port 3000)
+  frontend:
+    build:
+      context: ./research-agent
+      dockerfile: Dockerfile
+      args:
+        # VM의 실제 IP 주소로 변경해야 함
+        NEXT_PUBLIC_REACT_AGENT_URL: http://192.168.1.100:2025
+        NEXT_PUBLIC_LANGGRAPH_URL: http://192.168.1.100:2024
+        NEXT_PUBLIC_ELASTICSEARCH_URL: http://192.168.1.100:9200
+    container_name: research-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      # 런타임 환경 변수 (컨테이너 내부에서는 서비스명 사용 가능)
+      - INTERNAL_REACT_AGENT_URL=http://react-agent:2025
+      - INTERNAL_LANGGRAPH_URL=http://deep-research-agent:2024
+      - INTERNAL_ELASTICSEARCH_URL=http://elasticsearch:9200
+    depends_on:
+      - react-agent
+      - deep-research-agent
+      - elasticsearch
+    networks:
+      - research-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3000 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  research-network:
+    driver: bridge
+
+volumes:
+  elasticsearch-data:
+    driver: local

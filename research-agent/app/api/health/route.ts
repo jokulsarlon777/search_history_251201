@@ -58,8 +58,8 @@ async function checkElasticsearch(url: string): Promise<ServerHealth> {
   const startTime = Date.now();
 
   try {
-    // Elasticsearch는 루트 엔드포인트에서 클러스터 정보 반환
-    const response = await fetch(url, {
+    // Elasticsearch 헬스 체크 전용 엔드포인트 사용
+    const response = await fetch(`${url}/_cluster/health`, {
       method: "GET",
       signal: AbortSignal.timeout(5000), // 5초 타임아웃
     });
@@ -73,8 +73,9 @@ async function checkElasticsearch(url: string): Promise<ServerHealth> {
         url,
         status: "online",
         responseTime,
-        version: data.version?.number,
         clusterName: data.cluster_name,
+        // Cluster health status가 red인 경우 경고
+        error: data.status === 'red' ? 'Cluster is unhealthy' : undefined,
       };
     } else {
       return {

@@ -64,7 +64,28 @@ export async function loadThreadMessages(
     for (const msg of messages) {
       if (typeof msg === "object" && msg !== null) {
         const role = msg.type || msg.role || "";
-        const content = msg.content || "";
+        const rawContent = msg.content || "";
+
+        // Extract text content from various possible content formats
+        let content = "";
+        if (typeof rawContent === "string") {
+          content = rawContent;
+        } else if (Array.isArray(rawContent)) {
+          // Handle array format: [{ type: "text", text: "..." }, ...]
+          content = rawContent
+            .map((item) => {
+              if (typeof item === "string") return item;
+              if (typeof item === "object" && item !== null) {
+                return item.text || item.content || "";
+              }
+              return "";
+            })
+            .join("");
+        } else if (typeof rawContent === "object" && rawContent !== null) {
+          // Handle object format: { text: "...", ... }
+          content = (rawContent as any).text || (rawContent as any).content || JSON.stringify(rawContent);
+        }
+
         const createdAt =
           (msg.created_at as string | undefined) ||
           (msg.timestamp as string | undefined) ||
@@ -79,7 +100,7 @@ export async function loadThreadMessages(
         ) {
           formattedMessages.push({
             role: "user",
-            content: String(content),
+            content: content,
             timestamp: createdAt,
             tags,
           });
@@ -89,7 +110,7 @@ export async function loadThreadMessages(
         ) {
           formattedMessages.push({
             role: "assistant",
-            content: String(content),
+            content: content,
             timestamp: createdAt,
             tags,
           });
