@@ -1240,14 +1240,14 @@ export default function Home() {
                       <div className="w-8 h-8 rounded-lg bg-gray-500/10 flex items-center justify-center">
                         <Sparkles className="h-4 w-4 text-gray-600 dark:text-gray-400" />
                       </div>
-                      <h3 className="font-semibold text-sm text-foreground">기본 모드</h3>
+                      <h3 className="font-semibold text-sm text-gray-900 dark:text-gray-100">기본 모드</h3>
                     </div>
-                    <p className="text-xs text-muted-foreground leading-relaxed mb-2">
+                    <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed mb-2">
                       일반적인 질문에 빠르게 답변합니다.
                     </p>
-                    <ul className="text-xs text-muted-foreground space-y-1">
-                      <li>• 응답 속도: <span className="font-medium text-foreground">빠름 (5~10초)</span></li>
-                      <li>• 정보 깊이: <span className="font-medium text-foreground">기본</span></li>
+                    <ul className="text-xs text-gray-600 dark:text-gray-400 space-y-1">
+                      <li>• 응답 속도: <span className="font-medium text-gray-900 dark:text-gray-100">빠름 (5~10초)</span></li>
+                      <li>• 정보 깊이: <span className="font-medium text-gray-900 dark:text-gray-100">기본</span></li>
                       <li>• 추천: 간단한 질문</li>
                     </ul>
                   </div>
@@ -1264,7 +1264,7 @@ export default function Home() {
                       빠르게 여러 정보를 조사하여 답변합니다.
                     </p>
                     <ul className="text-xs text-amber-600 dark:text-amber-400 space-y-1">
-                      <li>• 응답 속도: <span className="font-medium text-amber-900 dark:text-amber-100">보통 (20~40초)</span></li>
+                      <li>• 응답 속도: <span className="font-medium text-amber-900 dark:text-amber-100">보통 (약 3분)</span></li>
                       <li>• 정보 깊이: <span className="font-medium text-amber-900 dark:text-amber-100">중간</span></li>
                       <li>• 추천: 비교/조사가 필요한 질문</li>
                     </ul>
@@ -1282,7 +1282,7 @@ export default function Home() {
                       심층적인 조사를 통해 상세하게 답변합니다.
                     </p>
                     <ul className="text-xs text-blue-600 dark:text-blue-400 space-y-1">
-                      <li>• 응답 속도: <span className="font-medium text-blue-900 dark:text-blue-100">느림 (1~3분)</span></li>
+                      <li>• 응답 속도: <span className="font-medium text-blue-900 dark:text-blue-100">느림 (약 5분)</span></li>
                       <li>• 정보 깊이: <span className="font-medium text-blue-900 dark:text-blue-100">매우 깊음</span></li>
                       <li>• 추천: 복잡하고 전문적인 질문</li>
                     </ul>
