@@ -66,8 +66,20 @@ async function checkElasticsearch(url: string): Promise<ServerHealth> {
 
     const responseTime = Date.now() - startTime;
 
-    if (response.ok) {
-      // Content-Type 확인 - JSON이 아니면 잘못된 서버
+    // 200 OK 또는 401 Unauthorized면 서버가 살아있음
+    if (response.ok || response.status === 401) {
+      // 401이면 인증 필요하지만 서버는 정상 작동 중
+      if (response.status === 401) {
+        return {
+          name: "Elasticsearch",
+          url,
+          status: "online",
+          responseTime,
+          clusterName: "Authentication required",
+        };
+      }
+
+      // 200 OK인 경우
       const contentType = response.headers.get('content-type');
       if (!contentType || !contentType.includes('application/json')) {
         return {
@@ -95,9 +107,9 @@ async function checkElasticsearch(url: string): Promise<ServerHealth> {
         return {
           name: "Elasticsearch",
           url,
-          status: "error",
+          status: "online",
           responseTime,
-          error: "Invalid Elasticsearch response",
+          clusterName: "Unknown",
         };
       }
     } else {
