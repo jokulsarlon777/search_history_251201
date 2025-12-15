@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { Moon, Sun, Sparkles, Menu, FileText } from "lucide-react";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
@@ -11,6 +11,7 @@ import { ChatInput } from "@/components/chat-input";
 import { ThreadSidebar } from "@/components/thread-sidebar";
 import { ConfigSettings } from "@/components/config-settings";
 import { ErrorBoundary } from "@/components/error-boundary";
+import { SectionErrorBoundary } from "@/components/section-error-boundary";
 import { ExportConversation } from "@/components/export-conversation";
 import { LogViewer } from "@/components/log-viewer";
 import { ServerHealth } from "@/components/server-health";
@@ -50,6 +51,7 @@ export default function Home() {
   const [logViewerOpen, setLogViewerOpen] = useState(false);
   const { isOnline, wasOffline} = useNetworkStatus();
   const sourcesRef = useRef<Map<string, { title: string; url: string; snippet?: string }>>(new Map());
+  const [isLoadingThread, setIsLoadingThread] = useState(false);
 
   // 모드별 Thread ID 관리
   const reactThreadIdRef = useRef<string | null>(null);
@@ -131,7 +133,7 @@ export default function Home() {
   }, []);
 
   // Search handler
-  const handleSearch = (query: string) => {
+  const handleSearch = useCallback((query: string) => {
     setSearchQuery(query);
 
     if (!query.trim()) {
@@ -150,31 +152,31 @@ export default function Home() {
 
     setSearchResults(results);
     setCurrentSearchIndex(0);
-  };
+  }, [messages]);
 
   // Navigate to next search result
-  const handleNextResult = () => {
+  const handleNextResult = useCallback(() => {
     if (searchResults.length > 0) {
       setCurrentSearchIndex((prev) => (prev + 1) % searchResults.length);
     }
-  };
+  }, [searchResults.length]);
 
   // Navigate to previous search result
-  const handlePreviousResult = () => {
+  const handlePreviousResult = useCallback(() => {
     if (searchResults.length > 0) {
       setCurrentSearchIndex((prev) =>
         prev === 0 ? searchResults.length - 1 : prev - 1
       );
     }
-  };
+  }, [searchResults.length]);
 
   // Close search
-  const handleCloseSearch = () => {
+  const handleCloseSearch = useCallback(() => {
     setIsSearchOpen(false);
     setSearchQuery("");
     setSearchResults([]);
     setCurrentSearchIndex(0);
-  };
+  }, []);
 
   // Handle message edit
   const handleEditMessage = async (messageIndex: number, newContent: string) => {
@@ -276,7 +278,7 @@ export default function Home() {
   }, [messages]);
 
   // Handle thread selection
-  const handleThreadSelect = async (threadId: string) => {
+  const handleThreadSelect = useCallback(async (threadId: string) => {
     if (threadId === currentThreadId) return;
 
     logger.info('THREAD', 'Thread selected', { threadId });
@@ -291,6 +293,9 @@ export default function Home() {
         setCurrentThreadId(threadId);
         return;
       }
+
+      // Show loading state
+      setIsLoadingThread(true);
 
       // If no cached messages, load from correct server
       if (threadMetadata?.api_url && threadMetadata?.assistant_id) {
@@ -313,11 +318,13 @@ export default function Home() {
     } catch (error) {
       console.error("Failed to load thread:", error);
       toast.error("대화 불러오기 실패");
+    } finally {
+      setIsLoadingThread(false);
     }
-  };
+  }, [currentThreadId, threads, setMessages, setCurrentThreadId, apiKey, apiUrl]);
 
   // Handle thread deletion
-  const handleThreadDelete = async (threadId: string) => {
+  const handleThreadDelete = useCallback(async (threadId: string) => {
     logger.info('THREAD', 'Thread delete requested', { threadId });
 
     try {
@@ -337,16 +344,16 @@ export default function Home() {
       console.error("Failed to delete thread:", error);
       toast.error("대화 삭제 중 오류 발생");
     }
-  };
+  }, [apiUrl, apiKey, deleteThread]);
 
   // Handle new thread
-  const handleNewThread = () => {
+  const handleNewThread = useCallback(() => {
     logger.info('THREAD', 'New thread created');
     logger.logInteraction('thread_action', { content: 'new_thread' });
     reset();
     setUseQuickMode(false);
     toast.success("새 대화를 시작합니다");
-  };
+  }, [reset, setUseQuickMode]);
 
   const handleStopGeneration = () => {
     if (abortControllerRef.current) {
@@ -570,27 +577,15 @@ export default function Home() {
       // 경과 시간 추적 시작
       startTimeRef.current = Date.now();
 
-      // 모드별 예상 시간 설정 (ms)
-      const estimatedTimes: Record<string, number> = {
-        react: 5000,      // React Agent: 5초
-        quick: 20000,     // Quick Mode: 20초
-        deep: 120000,     // Deep Research: 2분
-      };
-
-      const currentMode = useQuickMode ? 'quick' : (useDeepResearchMode ? 'deep' : 'react');
-      const estimatedTime = estimatedTimes[currentMode];
-
       // 경과 시간 업데이트 인터벌 시작 (1초마다)
       if (elapsedTimeIntervalRef.current) {
         clearInterval(elapsedTimeIntervalRef.current);
       }
       elapsedTimeIntervalRef.current = setInterval(() => {
         const elapsed = Date.now() - startTimeRef.current;
-        const remaining = Math.max(0, estimatedTime - elapsed);
         setResearchStage(prev => prev ? {
           ...prev,
           elapsedTime: elapsed,
-          estimatedTime: remaining,
         } : null);
       }, 1000);
 
@@ -598,7 +593,6 @@ export default function Home() {
         stage: "planning",
         message: "리서치 계획을 수립하고 있습니다...",
         elapsedTime: 0,
-        estimatedTime,
       });
 
       // Mode 확인 및 적절한 서버/Assistant 선택
@@ -1136,13 +1130,15 @@ export default function Home() {
       {/* Sidebar */}
       {sidebarOpen && (
         <div className="w-80 flex-shrink-0">
-          <ThreadSidebar
-            threads={threads}
-            currentThreadId={currentThreadId}
-            onThreadSelect={handleThreadSelect}
-            onThreadDelete={handleThreadDelete}
-            onNewThread={handleNewThread}
-          />
+          <SectionErrorBoundary sectionName="사이드바" compact>
+            <ThreadSidebar
+              threads={threads}
+              currentThreadId={currentThreadId}
+              onThreadSelect={handleThreadSelect}
+              onThreadDelete={handleThreadDelete}
+              onNewThread={handleNewThread}
+            />
+          </SectionErrorBoundary>
         </div>
       )}
 
@@ -1164,11 +1160,11 @@ export default function Home() {
                 <div className="flex items-center gap-2">
                   <Sparkles className="h-5 w-5 text-primary" />
                   <h1 className="text-2xl font-bold text-foreground tracking-tight">
-                    AI Research Agent
+                    시작의장 마스터리스트
                   </h1>
                 </div>
                 <p className="text-sm text-muted-foreground leading-relaxed font-normal">
-                  LangGraph 기반 심층 리서치 워크스페이스
+                  LLM 기반 챗봇 시스템
                 </p>
               </div>
             </div>
@@ -1207,66 +1203,153 @@ export default function Home() {
       {/* Messages Area */}
       <ScrollArea ref={scrollRef} className="flex-1">
         <div className="max-w-7xl mx-auto px-6 py-8 space-y-6">
-          {messages.length === 0 && !streamingContent ? (
-            <div className="flex flex-col items-center justify-center h-full min-h-[400px] text-center space-y-4 fade-in">
+          {isLoadingThread ? (
+            <div className="flex flex-col items-center justify-center h-full min-h-[400px] text-center space-y-4">
+              <div className="relative">
+                <div className="rounded-full bg-primary/10 p-6 animate-pulse">
+                  <Sparkles className="h-12 w-12 text-primary animate-spin" />
+                </div>
+              </div>
+              <h2 className="text-xl font-semibold text-foreground">
+                대화 불러오는 중...
+              </h2>
+              <p className="text-muted-foreground max-w-md text-sm">
+                잠시만 기다려주세요
+              </p>
+            </div>
+          ) : messages.length === 0 && !streamingContent ? (
+            <div className="flex flex-col items-center justify-center h-full min-h-[400px] text-center space-y-6 fade-in px-6">
               <div className="rounded-full bg-primary/10 p-6">
                 <Sparkles className="h-12 w-12 text-primary" />
               </div>
-              <h2 className="text-2xl font-semibold text-foreground">
-                무엇을 도와드릴까요?
-              </h2>
-              <p className="text-muted-foreground max-w-md">
-                궁금한 것을 물어보세요. AI가 깊이 있는 리서치를 통해 답변해드립니다.
-              </p>
+              <div className="space-y-2">
+                <h2 className="text-2xl font-semibold text-foreground">
+                  무엇을 도와드릴까요?
+                </h2>
+                <p className="text-muted-foreground max-w-md">
+                  궁금한 것을 물어보세요. AI가 답변해드립니다.
+                </p>
+              </div>
+
+              {/* 모드 설명 가이드 */}
+              <div className="w-full max-w-3xl mt-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* 기본 모드 (React 모드) */}
+                  <div className="p-5 rounded-xl bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 border border-gray-200 dark:border-gray-700 text-left">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="w-8 h-8 rounded-lg bg-gray-500/10 flex items-center justify-center">
+                        <Sparkles className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+                      </div>
+                      <h3 className="font-semibold text-sm text-foreground">기본 모드</h3>
+                    </div>
+                    <p className="text-xs text-muted-foreground leading-relaxed mb-2">
+                      일반적인 질문에 빠르게 답변합니다.
+                    </p>
+                    <ul className="text-xs text-muted-foreground space-y-1">
+                      <li>• 응답 속도: <span className="font-medium text-foreground">빠름 (5~10초)</span></li>
+                      <li>• 정보 깊이: <span className="font-medium text-foreground">기본</span></li>
+                      <li>• 추천: 간단한 질문</li>
+                    </ul>
+                  </div>
+
+                  {/* Quick Research 모드 */}
+                  <div className="p-5 rounded-xl bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950 dark:to-orange-950 border border-amber-200 dark:border-amber-800 text-left">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center">
+                        <span className="text-lg">⚡</span>
+                      </div>
+                      <h3 className="font-semibold text-sm text-amber-900 dark:text-amber-100">Quick Research</h3>
+                    </div>
+                    <p className="text-xs text-amber-700 dark:text-amber-300 leading-relaxed mb-2">
+                      빠르게 여러 정보를 조사하여 답변합니다.
+                    </p>
+                    <ul className="text-xs text-amber-600 dark:text-amber-400 space-y-1">
+                      <li>• 응답 속도: <span className="font-medium text-amber-900 dark:text-amber-100">보통 (20~40초)</span></li>
+                      <li>• 정보 깊이: <span className="font-medium text-amber-900 dark:text-amber-100">중간</span></li>
+                      <li>• 추천: 비교/조사가 필요한 질문</li>
+                    </ul>
+                  </div>
+
+                  {/* Deep Research 모드 */}
+                  <div className="p-5 rounded-xl bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-950 dark:to-purple-950 border border-blue-200 dark:border-blue-800 text-left">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                        <span className="text-lg">🔍</span>
+                      </div>
+                      <h3 className="font-semibold text-sm text-blue-900 dark:text-blue-100">Deep Research</h3>
+                    </div>
+                    <p className="text-xs text-blue-700 dark:text-blue-300 leading-relaxed mb-2">
+                      심층적인 조사를 통해 상세하게 답변합니다.
+                    </p>
+                    <ul className="text-xs text-blue-600 dark:text-blue-400 space-y-1">
+                      <li>• 응답 속도: <span className="font-medium text-blue-900 dark:text-blue-100">느림 (1~3분)</span></li>
+                      <li>• 정보 깊이: <span className="font-medium text-blue-900 dark:text-blue-100">매우 깊음</span></li>
+                      <li>• 추천: 복잡하고 전문적인 질문</li>
+                    </ul>
+                  </div>
+                </div>
+
+                {/* 사용 팁 */}
+                <div className="mt-4 p-4 rounded-lg bg-primary/5 border border-primary/20">
+                  <p className="text-xs text-muted-foreground">
+                    💡 <span className="font-medium text-foreground">팁:</span> 아래 입력창 위의 버튼으로 모드를 선택할 수 있습니다.
+                    선택하지 않으면 기본 모드로 작동합니다.
+                  </p>
+                </div>
+              </div>
             </div>
           ) : (
-            <>
+            <SectionErrorBoundary sectionName="메시지">
               {messages.map((message, index) => (
                 <div key={`${message.role}-${index}`} className="fade-in">
-                  <ChatMessage
-                    message={message}
-                    isEditable={message.role === "user" && index === messages.length - 2}
-                    onEdit={(newContent) => handleEditMessage(index, newContent)}
-                    onSuggestQuestion={handleSendMessage}
-                    onFeedback={message.role === "assistant" ? handleFeedback(index) : undefined}
-                  />
+                  <SectionErrorBoundary sectionName={`메시지 #${index + 1}`} compact>
+                    <ChatMessage
+                      message={message}
+                      isEditable={message.role === "user" && index === messages.length - 2}
+                      onEdit={(newContent) => handleEditMessage(index, newContent)}
+                      onSuggestQuestion={handleSendMessage}
+                      onFeedback={message.role === "assistant" ? handleFeedback(index) : undefined}
+                    />
+                  </SectionErrorBoundary>
                 </div>
               ))}
               {(isStreaming || streamingContent) && (
-                <div className="fade-in space-y-4">
-                  {/* Stage Stepper - shows overall progress for Quick/Deep modes */}
-                  {(useQuickMode || useDeepResearchMode) && researchStage && (
-                    <ResearchStageStepper
-                      stages={[
-                        { id: 'planning', label: '계획 수립' },
-                        { id: 'thinking', label: 'AI 사고' },
-                        { id: 'searching', label: '검색' },
-                        { id: 'researching', label: '리서치' },
-                        { id: 'analyzing', label: '분석' },
-                        { id: 'writing', label: '작성' },
-                      ]}
-                      currentStage={researchStage.stage}
-                      completedStages={completedStages}
+                <SectionErrorBoundary sectionName="스트리밍 메시지" compact>
+                  <div className="fade-in space-y-4">
+                    {/* Stage Stepper - shows overall progress for Quick/Deep modes */}
+                    {(useQuickMode || useDeepResearchMode) && researchStage && (
+                      <ResearchStageStepper
+                        stages={[
+                          { id: 'planning', label: '계획 수립' },
+                          { id: 'thinking', label: 'AI 사고' },
+                          { id: 'searching', label: '검색' },
+                          { id: 'researching', label: '리서치' },
+                          { id: 'analyzing', label: '분석' },
+                          { id: 'writing', label: '작성' },
+                        ]}
+                        currentStage={researchStage.stage}
+                        completedStages={completedStages}
+                      />
+                    )}
+
+                    {/* Intermediate Results - shows real-time findings */}
+                    {Object.keys(intermediateResults).length > 0 && (
+                      <IntermediateResultsDisplay results={intermediateResults} />
+                    )}
+
+                    <ChatMessage
+                      message={{
+                        role: "assistant",
+                        content: streamingContent
+                      }}
+                      researchStage={researchStage}
+                      isStreaming={true}
+                      onSuggestQuestion={handleSendMessage}
                     />
-                  )}
-
-                  {/* Intermediate Results - shows real-time findings */}
-                  {Object.keys(intermediateResults).length > 0 && (
-                    <IntermediateResultsDisplay results={intermediateResults} />
-                  )}
-
-                  <ChatMessage
-                    message={{
-                      role: "assistant",
-                      content: streamingContent
-                    }}
-                    researchStage={researchStage}
-                    isStreaming={true}
-                    onSuggestQuestion={handleSendMessage}
-                  />
-                </div>
+                  </div>
+                </SectionErrorBoundary>
               )}
-            </>
+            </SectionErrorBoundary>
           )}
         </div>
       </ScrollArea>

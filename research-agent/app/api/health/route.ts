@@ -17,41 +17,41 @@ interface ServerHealth {
 async function checkServer(name: string, url: string): Promise<ServerHealth> {
   const startTime = Date.now();
 
-  try {
-    // LangGraph 서버는 /ok 엔드포인트에서 health check 응답
-    const response = await fetch(`${url}/ok`, {
-      method: "GET",
-      signal: AbortSignal.timeout(5000), // 5초 타임아웃
-    });
+  // LangGraph 서버는 여러 health check 엔드포인트를 가질 수 있음
+  const healthEndpoints = ['/ok', '/info', '/health'];
 
-    const responseTime = Date.now() - startTime;
+  for (const endpoint of healthEndpoints) {
+    try {
+      const response = await fetch(`${url}${endpoint}`, {
+        method: "GET",
+        signal: AbortSignal.timeout(5000), // 5초 타임아웃
+      });
 
-    if (response.ok) {
-      return {
-        name,
-        url,
-        status: "online",
-        responseTime,
-      };
-    } else {
-      return {
-        name,
-        url,
-        status: "error",
-        responseTime,
-        error: `HTTP ${response.status}`,
-      };
+      const responseTime = Date.now() - startTime;
+
+      if (response.ok) {
+        return {
+          name,
+          url,
+          status: "online",
+          responseTime,
+        };
+      }
+    } catch (error) {
+      // 다음 엔드포인트 시도
+      continue;
     }
-  } catch (error: any) {
-    const responseTime = Date.now() - startTime;
-    return {
-      name,
-      url,
-      status: "offline",
-      responseTime,
-      error: error.message || "Connection failed",
-    };
   }
+
+  // 모든 엔드포인트 실패 시
+  const responseTime = Date.now() - startTime;
+  return {
+    name,
+    url,
+    status: "offline",
+    responseTime,
+    error: "No valid health endpoint found",
+  };
 }
 
 async function checkElasticsearch(url: string): Promise<ServerHealth> {
@@ -67,6 +67,18 @@ async function checkElasticsearch(url: string): Promise<ServerHealth> {
     const responseTime = Date.now() - startTime;
 
     if (response.ok) {
+      // Content-Type 확인 - JSON이 아니면 잘못된 서버
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        return {
+          name: "Elasticsearch",
+          url,
+          status: "error",
+          responseTime,
+          error: "Not an Elasticsearch server (HTML response)",
+        };
+      }
+
       const data = await response.json();
       return {
         name: "Elasticsearch",
@@ -100,20 +112,39 @@ async function checkElasticsearch(url: string): Promise<ServerHealth> {
 
 export async function GET(request: NextRequest) {
   try {
-    // 세 서버 동시 체크
-    const [reactAgent, researchAgent, elasticsearch] = await Promise.all([
+    // Elasticsearch는 선택적 - URL이 유효한 경우에만 체크
+    const shouldCheckElasticsearch = ELASTICSEARCH_URL &&
+      !ELASTICSEARCH_URL.includes('8000') && // React/Research agent 포트가 아님
+      ELASTICSEARCH_URL !== 'http://localhost:9200'; // 기본값이 아니거나 실제 존재하는 경우
+
+    const checks = [
       checkServer("React Agent", REACT_AGENT_URL),
       checkServer("Deep Research Agent", RESEARCH_AGENT_URL),
-      checkElasticsearch(ELASTICSEARCH_URL),
-    ]);
+    ];
 
-    const allHealthy =
+    if (shouldCheckElasticsearch) {
+      checks.push(checkElasticsearch(ELASTICSEARCH_URL));
+    }
+
+    const results = await Promise.all(checks);
+    const [reactAgent, researchAgent, elasticsearch] = [
+      results[0],
+      results[1],
+      results[2] || {
+        name: "Elasticsearch",
+        url: ELASTICSEARCH_URL,
+        status: "offline" as const,
+        error: "Not configured or disabled",
+      }
+    ];
+
+    // 핵심 서버(React Agent, Research Agent)만 체크
+    const coreServersHealthy =
       reactAgent.status === "online" &&
-      researchAgent.status === "online" &&
-      elasticsearch.status === "online";
+      researchAgent.status === "online";
 
     return NextResponse.json({
-      status: allHealthy ? "healthy" : "degraded",
+      status: coreServersHealthy ? "healthy" : "degraded",
       timestamp: new Date().toISOString(),
       servers: {
         reactAgent,

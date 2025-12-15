@@ -15,6 +15,8 @@ interface ChatInputProps {
   className?: string;
 }
 
+const MAX_INPUT_LENGTH = 10000; // 최대 입력 길이
+
 export function ChatInput({
   onSend,
   onStop,
@@ -26,6 +28,11 @@ export function ChatInput({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { useQuickMode, setUseQuickMode, useDeepResearchMode, setUseDeepResearchMode, isStreaming } = useAppStore();
 
+  // 입력 길이 계산
+  const inputLength = input.length;
+  const isNearLimit = inputLength > MAX_INPUT_LENGTH * 0.8; // 80% 도달 시 경고
+  const isOverLimit = inputLength > MAX_INPUT_LENGTH;
+
   // Auto-resize textarea
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -36,8 +43,15 @@ export function ChatInput({
   }, [input]);
 
   const handleSend = () => {
-    if (!input.trim() || disabled) return;
-    onSend(input.trim());
+    const trimmedInput = input.trim();
+
+    // 입력 검증
+    if (!trimmedInput || disabled) return;
+    if (trimmedInput.length > MAX_INPUT_LENGTH) {
+      return; // 길이 초과 시 전송 차단
+    }
+
+    onSend(trimmedInput);
     setInput("");
   };
 
@@ -108,17 +122,40 @@ export function ChatInput({
       </div>
 
       {/* Input Area */}
-      <div className="relative flex items-end gap-2 rounded-2xl bg-background border-2 border-border p-3.5 shadow-lg transition-all duration-300 hover:border-primary/30 focus-within:border-primary focus-within:shadow-xl backdrop-blur-xl">
+      <div className={cn(
+        "relative flex items-end gap-2 rounded-2xl bg-background border-2 p-3.5 shadow-lg transition-all duration-300 backdrop-blur-xl",
+        isOverLimit
+          ? "border-red-500 focus-within:border-red-500"
+          : "border-border hover:border-primary/30 focus-within:border-primary focus-within:shadow-xl"
+      )}>
         <Textarea
           ref={textareaRef}
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={(e) => {
+            const newValue = e.target.value;
+            // 최대 길이 제한 적용
+            if (newValue.length <= MAX_INPUT_LENGTH) {
+              setInput(newValue);
+            }
+          }}
           onKeyDown={handleKeyDown}
           placeholder={disabled ? "전송 중..." : placeholder}
           disabled={disabled}
           className="min-h-[48px] max-h-[200px] resize-none border-0 bg-transparent pr-14 text-[15px] leading-relaxed focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/50"
           rows={1}
         />
+
+        {/* 문자 카운터 (80% 도달 시 표시) */}
+        {isNearLimit && (
+          <div className={cn(
+            "absolute bottom-14 right-3 text-xs font-medium px-2 py-1 rounded-md",
+            isOverLimit
+              ? "bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400"
+              : "bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400"
+          )}>
+            {inputLength.toLocaleString()} / {MAX_INPUT_LENGTH.toLocaleString()}
+          </div>
+        )}
         {isStreaming ? (
           <Button
             onClick={onStop}
@@ -131,9 +168,9 @@ export function ChatInput({
         ) : (
           <Button
             onClick={handleSend}
-            disabled={disabled || !input.trim()}
+            disabled={disabled || !input.trim() || isOverLimit}
             size="icon"
-            className="absolute bottom-3 right-3 h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-primary/90 hover:from-primary/90 hover:to-primary shadow-md"
+            className="absolute bottom-3 right-3 h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-primary/90 hover:from-primary/90 hover:to-primary shadow-md disabled:opacity-50"
           >
             <SendHorizontal className="h-4.5 w-4.5" />
           </Button>

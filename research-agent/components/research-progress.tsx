@@ -1,7 +1,7 @@
 "use client";
 
 import { memo } from "react";
-import { Loader2, SearchCheck, Lightbulb, Pencil, CheckCircle2, Brain, Database, AlertCircle, Clock, Timer } from "lucide-react";
+import { Loader2, SearchCheck, Lightbulb, Pencil, CheckCircle2, Brain, Database, AlertCircle, Clock } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
@@ -14,7 +14,6 @@ export interface ResearchStage {
   message?: string;
   error?: string;
   elapsedTime?: number;
-  estimatedTime?: number;
 }
 
 interface ResearchProgressProps {
@@ -159,23 +158,13 @@ export const ResearchProgress = memo(function ResearchProgress({
                   )}
                 </p>
 
-                {/* 경과 시간 & 예상 시간 */}
-                {!researchStage.error && (researchStage.elapsedTime !== undefined || researchStage.estimatedTime !== undefined) && (
+                {/* 경과 시간 */}
+                {!researchStage.error && researchStage.elapsedTime !== undefined && (
                   <div className="flex items-center gap-3 text-xs">
-                    {researchStage.elapsedTime !== undefined && (
-                      <div className="flex items-center gap-1 text-muted-foreground">
-                        <Clock className="h-3 w-3" />
-                        <span>경과: {formatElapsedTime(researchStage.elapsedTime)}</span>
-                      </div>
-                    )}
-                    {researchStage.estimatedTime !== undefined && researchStage.estimatedTime > 0 && (
-                      <div className="flex items-center gap-1 text-primary">
-                        <Timer className="h-3 w-3" />
-                        <span className="font-medium">
-                          약 {Math.ceil(researchStage.estimatedTime / 1000)}초 남음
-                        </span>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-1 text-muted-foreground">
+                      <Clock className="h-3 w-3" />
+                      <span>경과: {formatElapsedTime(researchStage.elapsedTime)}</span>
+                    </div>
                   </div>
                 )}
 
