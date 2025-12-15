@@ -3,12 +3,15 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: 'standalone',
 
-  // Disable linting and type checking during build (optional)
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
   typescript: {
     ignoreBuildErrors: false,
+  },
+
+  experimental: {
+    // Enable system TLS certificates for Turbopack (사내망 환경 대응)
+    turbopack: {
+      useSystemTlsCerts: true,
+    },
   },
 };
 
