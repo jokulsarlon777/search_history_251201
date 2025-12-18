@@ -52,6 +52,8 @@ export default function Home() {
   const { isOnline, wasOffline} = useNetworkStatus();
   const sourcesRef = useRef<Map<string, { title: string; url: string; snippet?: string }>>(new Map());
   const [isLoadingThread, setIsLoadingThread] = useState(false);
+  const lastAssistantMessageRef = useRef<HTMLDivElement>(null);
+  const hasScrolledForCurrentMessageRef = useRef(false);
 
   // 모드별 Thread ID 관리
   const reactThreadIdRef = useRef<string | null>(null);
@@ -109,15 +111,65 @@ export default function Home() {
     }
   }, [isOnline, wasOffline, mounted]);
 
-  // Auto-scroll to bottom when messages or streaming content changes
+  // Reset scroll flag when streaming starts
   useEffect(() => {
-    if (scrollRef.current) {
+    if (!isStreaming) {
+      hasScrolledForCurrentMessageRef.current = false;
+    }
+  }, [isStreaming]);
+
+  // Smart scroll: scroll to message start when SearchResultsTable appears, otherwise scroll to bottom once
+  useEffect(() => {
+    if (scrollRef.current && (isStreaming || streamingContent)) {
       const scrollContainer = scrollRef.current.querySelector('[data-radix-scroll-area-viewport]');
       if (scrollContainer) {
-        scrollContainer.scrollTop = scrollContainer.scrollHeight;
+        const hasSearchResults = streamingContent.includes('```json:search_results');
+
+        if (hasSearchResults && !hasScrolledForCurrentMessageRef.current) {
+          // SearchResultsTable detected: scroll to message start to show Thinking/Tool info
+          if (lastAssistantMessageRef.current) {
+            lastAssistantMessageRef.current.scrollIntoView({
+              behavior: 'smooth',
+              block: 'start'
+            });
+            hasScrolledForCurrentMessageRef.current = true;
+          }
+        } else if (!hasSearchResults && !hasScrolledForCurrentMessageRef.current) {
+          // Regular text: scroll to bottom once
+          scrollContainer.scrollTop = scrollContainer.scrollHeight;
+          hasScrolledForCurrentMessageRef.current = true;
+        }
       }
     }
-  }, [messages, streamingContent, researchStage]);
+    // If not streaming and we have messages, preserve scroll position when components render
+    else if (!isStreaming && messages.length > 0 && lastAssistantMessageRef.current) {
+      const scrollContainer = scrollRef.current?.querySelector('[data-radix-scroll-area-viewport]');
+      if (scrollContainer && lastAssistantMessageRef.current) {
+        // Preserve scroll position before layout changes
+        const messageTop = lastAssistantMessageRef.current.offsetTop;
+        const currentScrollTop = scrollContainer.scrollTop;
+
+        // Use requestAnimationFrame to handle DOM updates from ConclusionCard & SuggestedQuestions
+        requestAnimationFrame(() => {
+          // Calculate how much the message position changed
+          const newMessageTop = lastAssistantMessageRef.current?.offsetTop || messageTop;
+          const heightDiff = newMessageTop - messageTop;
+
+          // If message moved down due to new components (ConclusionCard ~100px, SuggestedQuestions ~200px)
+          // adjust scroll to maintain visual position
+          if (heightDiff > 0) {
+            scrollContainer.scrollTop = currentScrollTop + heightDiff;
+          } else {
+            // Normal case: scroll to message start
+            lastAssistantMessageRef.current?.scrollIntoView({
+              behavior: 'smooth',
+              block: 'start'
+            });
+          }
+        });
+      }
+    }
+  }, [messages, streamingContent, researchStage, isStreaming]);
 
   // Keyboard shortcut for search (Cmd+F / Ctrl+F)
   useEffect(() => {
@@ -190,7 +242,7 @@ export default function Home() {
     await handleSendMessage(newContent);
   };
 
-  // Load server threads on mount
+  // Load server threads on mount (Step 1: Load thread list only, messages loaded on click)
   useEffect(() => {
     const loadThreads = async () => {
       if (serverThreadsLoaded) return;
@@ -217,43 +269,80 @@ export default function Home() {
           },
         ];
 
-        // Load threads from both servers in parallel
+        // OPTIMIZED: Load only thread metadata first (fast), messages loaded on demand
         await Promise.all(
           serverConfigs.map(async (config) => {
             try {
               const client = createLangGraphClient(config.url, apiKey);
               const serverThreads = await getServerThreads(client, config.assistantId);
 
-              // Load messages for all threads in parallel
+              // Load first message for each thread to generate title (lightweight)
               const threadPromises = serverThreads.map(async (thread) => {
                 try {
-                  const msgs = await loadThreadMessages(client, thread.thread_id);
+                  // Load only the state to get first message for title
+                  const state = await client.threads.getState(thread.thread_id);
+                  let messages: any[] = [];
+
+                  if (Array.isArray(state)) {
+                    messages = state;
+                  } else if (typeof state === "object" && state !== null) {
+                    messages = (state as any).values?.messages || [];
+                  }
+
+                  // Extract title from first user message
+                  let title = thread.metadata?.title || "새 대화";
+                  if (messages.length > 0) {
+                    const firstUserMsg = messages.find((m: any) =>
+                      m.type?.toLowerCase().includes("human") ||
+                      m.type?.toLowerCase().includes("user") ||
+                      m.role?.toLowerCase().includes("user")
+                    );
+                    if (firstUserMsg?.content) {
+                      const content = typeof firstUserMsg.content === "string"
+                        ? firstUserMsg.content
+                        : JSON.stringify(firstUserMsg.content);
+                      title = content.slice(0, 30) + (content.length > 30 ? "..." : "");
+                    }
+                  }
+
                   return {
                     thread_id: thread.thread_id,
                     metadata: {
-                      title: msgs[0]?.content.slice(0, 30) + "..." || "새 대화",
+                      title,
                       created_at: thread.created_at || new Date().toISOString(),
-                      message_count: msgs.length,
-                      messages: msgs,
+                      message_count: messages.length,
+                      messages: [], // Don't cache messages yet - loaded on click
                       server_type: config.type,
                       api_url: config.url,
                       assistant_id: config.assistantId,
                     },
                   };
                 } catch (error) {
-                  console.error(`Failed to load messages for thread ${thread.thread_id}:`, error);
-                  return null;
+                  console.error(`Failed to load title for thread ${thread.thread_id}:`, error);
+                  // Return basic metadata even if title loading fails
+                  return {
+                    thread_id: thread.thread_id,
+                    metadata: {
+                      title: thread.metadata?.title || "새 대화",
+                      created_at: thread.created_at || new Date().toISOString(),
+                      message_count: 0,
+                      messages: [],
+                      server_type: config.type,
+                      api_url: config.url,
+                      assistant_id: config.assistantId,
+                    },
+                  };
                 }
               });
 
               const results = await Promise.all(threadPromises);
-
-              // Add successful results to threadsMap
               results.forEach((result) => {
                 if (result) {
                   threadsMap[result.thread_id] = result.metadata;
                 }
               });
+
+              console.log(`✅ Loaded ${serverThreads.length} threads from ${config.type} server with titles`);
             } catch (error) {
               console.error(`Failed to load threads from ${config.type} server:`, error);
             }
@@ -262,13 +351,14 @@ export default function Home() {
 
         setThreads(threadsMap);
         setServerThreadsLoaded(true);
+        console.log(`📋 Total threads loaded: ${Object.keys(threadsMap).length}`);
       } catch (error) {
         console.error("Failed to load threads:", error);
       }
     };
 
     loadThreads();
-  }, [serverThreadsLoaded]);
+  }, [serverThreadsLoaded, apiKey, apiUrl, assistantId, setThreads, setServerThreadsLoaded]);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -305,8 +395,18 @@ export default function Home() {
         setMessages(msgs);
         setCurrentThreadId(threadId);
 
-        // Update cache
+        // Update cache and message count
+        updateThreadMetadata(threadId, 'assistant', msgs[msgs.length - 1]?.content || '');
         threadMetadata.messages = msgs;
+        threadMetadata.message_count = msgs.length;
+
+        // Update title from first user message if not set
+        if (threadMetadata.title === "새 대화" && msgs.length > 0) {
+          const firstUserMsg = msgs.find(m => m.role === "user");
+          if (firstUserMsg) {
+            threadMetadata.title = firstUserMsg.content.slice(0, 30) + "...";
+          }
+        }
       } else {
         // Fallback: try default server
         console.warn(`⚠️ No server info for thread ${threadId}, using default server`);
@@ -314,6 +414,12 @@ export default function Home() {
         const msgs = await loadThreadMessages(client, threadId);
         setMessages(msgs);
         setCurrentThreadId(threadId);
+
+        // Update message count even for fallback
+        if (threadMetadata) {
+          threadMetadata.messages = msgs;
+          threadMetadata.message_count = msgs.length;
+        }
       }
     } catch (error) {
       console.error("Failed to load thread:", error);
@@ -1160,7 +1266,7 @@ export default function Home() {
                 <div className="flex items-center gap-2">
                   <Sparkles className="h-5 w-5 text-primary" />
                   <h1 className="text-2xl font-bold text-foreground tracking-tight">
-                    시작의장 마스터리스트
+                    사인오프 문제점 조회
                   </h1>
                 </div>
                 <p className="text-sm text-muted-foreground leading-relaxed font-normal">
@@ -1300,19 +1406,28 @@ export default function Home() {
             </div>
           ) : (
             <SectionErrorBoundary sectionName="메시지">
-              {messages.map((message, index) => (
-                <div key={`${message.role}-${index}`} className="fade-in">
-                  <SectionErrorBoundary sectionName={`메시지 #${index + 1}`} compact>
-                    <ChatMessage
-                      message={message}
-                      isEditable={message.role === "user" && index === messages.length - 2}
-                      onEdit={(newContent) => handleEditMessage(index, newContent)}
-                      onSuggestQuestion={handleSendMessage}
-                      onFeedback={message.role === "assistant" ? handleFeedback(index) : undefined}
-                    />
-                  </SectionErrorBoundary>
-                </div>
-              ))}
+              {messages.map((message, index) => {
+                // Find the last assistant message index
+                const lastAssistantIndex = messages.map((m, i) => m.role === "assistant" ? i : -1)
+                  .filter(i => i !== -1)
+                  .pop();
+                const isLastAssistant = message.role === "assistant" && index === lastAssistantIndex;
+
+                return (
+                  <div key={`${message.role}-${index}`} className="fade-in">
+                    <SectionErrorBoundary sectionName={`메시지 #${index + 1}`} compact>
+                      <ChatMessage
+                        ref={isLastAssistant ? lastAssistantMessageRef : null}
+                        message={message}
+                        isEditable={message.role === "user" && index === messages.length - 2}
+                        onEdit={(newContent) => handleEditMessage(index, newContent)}
+                        onSuggestQuestion={handleSendMessage}
+                        onFeedback={message.role === "assistant" ? handleFeedback(index) : undefined}
+                      />
+                    </SectionErrorBoundary>
+                  </div>
+                );
+              })}
               {(isStreaming || streamingContent) && (
                 <SectionErrorBoundary sectionName="스트리밍 메시지" compact>
                   <div className="fade-in space-y-4">

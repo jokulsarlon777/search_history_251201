@@ -139,7 +139,7 @@ export function ChatInput({
             }
           }}
           onKeyDown={handleKeyDown}
-          placeholder={disabled ? "전송 중..." : placeholder}
+          placeholder={disabled ? "전송 중..." : isStreaming ? "AI가 답변을 생성하는 중입니다..." : placeholder}
           disabled={disabled}
           className="min-h-[48px] max-h-[200px] resize-none border-0 bg-transparent pr-14 text-[15px] leading-relaxed focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/50"
           rows={1}

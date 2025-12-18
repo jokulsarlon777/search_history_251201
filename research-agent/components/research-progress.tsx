@@ -97,13 +97,13 @@ export const ResearchProgress = memo(function ResearchProgress({
       ? (researchStage.progress / researchStage.total) * 100
       : undefined;
 
-  // Thinking과 Searching 단계인지 확인
-  const isThinkingOrSearching = researchStage.stage === "thinking" || researchStage.stage === "searching";
+  // 모든 진행 중인 단계에 특별 효과 적용 (complete, error 제외)
+  const isActiveStage = ["planning", "thinking", "searching", "researching", "analyzing", "writing"].includes(researchStage.stage);
 
   return (
     <Card className={cn(
       "border-primary/20 shadow-md animate-in fade-in-0 slide-in-from-top-2",
-      isThinkingOrSearching && "border-2 border-primary/30 shadow-lg",
+      isActiveStage && "border-2 border-primary/30 shadow-lg",
       className
     )}>
       <CardContent className="pt-4 pb-4">
@@ -111,16 +111,17 @@ export const ResearchProgress = memo(function ResearchProgress({
           <div className={cn(
             "rounded-full p-2 flex-shrink-0 relative",
             config.bgColor,
-            isThinkingOrSearching && "animate-pulse"
+            isActiveStage && "animate-pulse"
           )}>
-            {/* 특별 효과: Thinking/Searching 단계에만 표시 */}
-            {isThinkingOrSearching && (
+            {/* 특별 효과: 진행 중인 단계에 표시 */}
+            {isActiveStage && (
               <div className="absolute inset-0 rounded-full bg-current opacity-20 animate-ping" />
             )}
             <Icon
               className={cn("h-4 w-4 relative z-10", config.color, {
-                "animate-pulse": researchStage.stage === "thinking",
+                "animate-pulse": researchStage.stage === "thinking" || researchStage.stage === "planning",
                 "animate-spin": researchStage.stage === "analyzing" || researchStage.stage === "searching",
+                "animate-bounce": researchStage.stage === "writing",
               })}
             />
           </div>
@@ -131,8 +132,8 @@ export const ResearchProgress = memo(function ResearchProgress({
                 <h4 className={cn("text-sm font-semibold", config.color)}>
                   {config.label}
                 </h4>
-                {/* Thinking/Searching 단계에 특별 배지 추가 */}
-                {isThinkingOrSearching && (
+                {/* 진행 중인 단계에 특별 배지 추가 */}
+                {isActiveStage && (
                   <span className="px-2 py-0.5 text-[10px] font-medium bg-primary/10 text-primary rounded-full animate-pulse">
                     진행 중
                   </span>
@@ -150,10 +151,10 @@ export const ResearchProgress = memo(function ResearchProgress({
                 <p className={cn(
                   "text-xs leading-relaxed",
                   researchStage.error ? "text-red-600 dark:text-red-400 font-medium" : "text-muted-foreground",
-                  isThinkingOrSearching && "animate-pulse"
+                  isActiveStage && "animate-pulse"
                 )}>
                   {researchStage.error || researchStage.message}
-                  {isThinkingOrSearching && (
+                  {isActiveStage && (
                     <span className="inline-block ml-1 animate-bounce">...</span>
                   )}
                 </p>
@@ -168,8 +169,8 @@ export const ResearchProgress = memo(function ResearchProgress({
                   </div>
                 )}
 
-                {/* Thinking/Searching 중일 때 추가 안내 */}
-                {isThinkingOrSearching && !researchStage.error && (
+                {/* 진행 중일 때 추가 안내 */}
+                {isActiveStage && !researchStage.error && (
                   <p className="text-[10px] text-muted-foreground/60 italic">
                     💡 잠시만 기다려주세요. AI가 정보를 처리하고 있습니다.
                   </p>

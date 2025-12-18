@@ -9,6 +9,7 @@ const nextConfig: NextConfig = {
 
   experimental: {
     // Enable system TLS certificates for Turbopack (사내망 환경 대응)
+    // @ts-ignore - turbopack option not yet in NextConfig type
     turbopack: {
       useSystemTlsCerts: true,
     },

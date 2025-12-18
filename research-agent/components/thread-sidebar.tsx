@@ -164,8 +164,17 @@ export function ThreadSidebar({
                             locale: ko,
                           })}
                         </span>
-                        <span>•</span>
-                        <span>{thread.message_count}개 메시지</span>
+                        {thread.message_count > 0 ? (
+                          <>
+                            <span>•</span>
+                            <span>{thread.message_count}개 메시지</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>•</span>
+                            <span className="text-muted-foreground/60 italic">비어있음</span>
+                          </>
+                        )}
                       </div>
                     </div>
                     <Button
